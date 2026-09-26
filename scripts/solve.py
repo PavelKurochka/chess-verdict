@@ -70,7 +70,7 @@ GAME_KEY = "chess-verdict"  # shared key: no ucinewgame, the hash survives
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.29.1"
+VERSION = "2.29.2"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),

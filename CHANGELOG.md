@@ -14,6 +14,29 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.29.2 — 2026-09-26
+
+Repository housekeeping; nothing in `SKILL.md` or the scripts changed except the
+version number.
+
+**`chess-best-move` is marked as removed.** `FAQ.md` and `README.md` compare
+this skill with `chess-best-move` from `letta-ai/skills`, which was removed from
+that repository in March 2026 (commit `6017653`). The comparison stays, with a
+note saying so; the links point to where it used to live.
+
+**Tests run on GitHub Actions.** `tests.yml` runs every file in `tests/`, the
+three-way version check and the description limits on each push and pull
+request. `selftest.py` runs there too but does not fail the build: it searches
+against a clock, and a shared runner is not the machine its baseline was
+measured on. Its first run there passed 25 of 25 in 52 s.
+
+**Releases are built by `release.yml`.** A `vX.Y.Z` tag that matches `VERSION`
+runs the tests, builds `chess-verdict.zip` from the tagged tree — a
+`chess-verdict/` folder, executable bits kept, repository-only files left out —
+and attaches it to the release. A hand-run build from `main` matched the
+published 2.29.1 archive file for file and mode for mode; only the two documents
+above differed.
+
 ## 2.29.1 — 2026-09-21
 
 Pre-publication fixes; no change in what the scripts compute.
