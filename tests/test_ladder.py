@@ -247,6 +247,52 @@ check("... and the second line keeps its own, earlier depth",
       lines[2].depth == 12)
 
 
+# --- probe_deep: one direct mate query after a huge score (issue #3) ----------
+#
+# Stockfish 19 often ends the main search on the queen sacrifice in
+# tests/positions.tsv at +62 to +92 with no mate, while `go mate 25` finds the
+# mate in 17 every time. The query must report what it was asked -- a mate no
+# longer than n -- and nothing when the answer is anything else.
+
+eng = ScriptedEngine({30: 17})
+n, line = session(eng, 60).probe_deep(BOARD, 30, 3.0)
+check("a direct mate query returns the mate it found",
+      n == 17 and line is not None and line.proved and eng.asked == [30])
+
+eng = ScriptedEngine()
+n, line = session(eng, 60).probe_deep(BOARD, 30, 3.0)
+check("no mate in the answer -> nothing, not a claim of absence",
+      (n, line) == (None, None))
+
+eng = ScriptedEngine({30: 34})          # a mate longer than was asked for
+n, line = session(eng, 60).probe_deep(BOARD, 30, 3.0)
+check("a mate longer than asked for is not what the query proved",
+      (n, line) == (None, None))
+
+
+# --- _fill_pv has a clock ------------------------------------------------------
+#
+# Lengthening a mate in 17 is a search to depth 36; until 2.30.0 it had no time
+# limit. The limit must be there, and must not outrun the budget.
+
+class LimitRecorder(ScriptedEngine):
+    def analyse(self, board, limit, **kwargs):
+        self.fill_limit = limit
+        return super().analyse(board, limit, **kwargs)
+
+
+rec = LimitRecorder()
+session(rec, 60)._fill_pv(BOARD, 17, solve.Line(None, None, []))
+check("lengthening a long mate line is capped in time, not only in depth",
+      rec.fill_limit.depth == 36 and rec.fill_limit.time == solve.FILL_PV_TIME,
+      f"limit {rec.fill_limit}")
+
+rec = LimitRecorder()
+session(rec, 0.5)._fill_pv(BOARD, 17, solve.Line(None, None, []))
+check("... and never past what is left of the budget",
+      rec.fill_limit.time <= 0.5, f"limit {rec.fill_limit}")
+
+
 # --- a dead engine is an error, not a timeout ---------------------------------
 #
 # EngineTerminatedError is a subclass of EngineError, so every `except
@@ -272,6 +318,7 @@ def propagates(call):
 
 
 for name, call in [
+        ("probe_deep", lambda s: s.probe_deep(BOARD, 30, 0.1)),
         ("probe_mate", lambda s: s.probe_mate(BOARD, rungs=5, step=0.3)),
         ("probe_shorter", lambda s: s.probe_shorter(BOARD, m=6, step=0.3)),
         ("_fill_pv", lambda s: s._fill_pv(BOARD, 3, solve.Line(None, None, []))),

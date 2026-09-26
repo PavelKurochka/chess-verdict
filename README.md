@@ -324,6 +324,10 @@ Three of these are the engine's, not the pipeline's, and no flag reaches them.
 - The mate ladder costs about 1.7 s on every position where it finds nothing,
   which is most of them. That is the price of not reporting a composed mate as
   an ordinary evaluation; `--mate-probe 0` removes both.
+- A main search that ends at +20 or more without a mate costs up to 3 s more:
+  one direct query for a mate in up to 30 (`--deep-mate`, `--deep-mate-time`;
+  `--deep-mate 0` removes it). A mate it finds replaces the score; a query that
+  finds none proves nothing and says so.
 - A mate reported by the ladder is proved to exist at that distance or shorter.
   Minimality is not claimed: no descent below the first rung that answers.
 - `--defences 4` is a sample. It supports the claim that the advantage survives

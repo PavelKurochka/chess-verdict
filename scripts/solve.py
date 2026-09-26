@@ -65,12 +65,19 @@ except ImportError as exc:
 
 ENGINE_PATH = os.environ.get("STOCKFISH", "/usr/games/stockfish")
 GAME_KEY = "chess-verdict"  # shared key: no ucinewgame, the hash survives
+# Centipawns at which a score with no mate triggers a direct mate query (issue
+# #3). The misses it was written for sat at +62 to +92; +20 leaves room while
+# keeping the query off every merely winning position.
+DEEP_MATE_FROM = 2000
+# Seconds allowed to lengthen a mate line that came back truncated (_fill_pv).
+# Past it the short line is kept: a longer line is not worth an open-ended wait.
+FILL_PV_TIME = 2.0
 
 #: Build identity. Must match `metadata.version` in SKILL.md's frontmatter and
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.29.3"
+VERSION = "2.30.0"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -266,6 +273,16 @@ TEXT = {
     "probe_kept": "The mate ladder proved a mate in {n}; the main search did not "
                   "reach it, so the ladder's line is reported instead.",
     "st_reprobe": "shorter-mate probe from {m}, {step:.1f} s a rung: {outcome}",
+    "st_deep": "mate-only search up to {n}, {s:.1f} s: {outcome}",
+    "deep_found": "The main search stopped at {score} without a mate; asked "
+                  "directly, the engine found a mate in {n}, which is reported "
+                  "instead.",
+    "deep_none": "NOTE: the main search stopped at {score} without a mate, and "
+                 "a mate-only search up to {n} found none in {s:.1f} s. That "
+                 "is not a proof there is none -- a score this large usually "
+                 "means one exists further out, or the query ran out of time.",
+    "deep_none_short": "none found (not a proof)",
+    "deep_found_short": "mate in {n} found",
     "reprobe_found": "shorter mate in {n} found",
     "reprobe_none": "nothing shorter than {m}",
     "reprobe_cut": "cut short: nothing proved about distances below {m}",
@@ -1087,13 +1104,53 @@ class Session:
         # Descending to a mate in 1 needs no rung: nothing is shorter than one.
         return found_n, found_line, proved or n < 1
 
-    def _fill_pv(self, board, n, line):
+    def probe_deep(self, board, n, seconds):
+        """One `go mate n` with a large n, after a main search that ended on a
+        huge score and no mate.
+
+        The ladder climbs from 1 in short steps and never reaches a long mate,
+        and the re-probe runs only once a mate is known. That left a gap which
+        Stockfish 19 falls into on `7Q/8/8/8/6p1/5pPb/5PpP/2k3K1 w`, a mate in
+        17: the main search often ends at +62 to +92 with no mate, in under two
+        seconds (issue #3), while `go mate 25` on the same position found the
+        mate 18 times out of 18, in 0.4-2.4 s. Asked directly, the engine sees
+        it.
+
+        Returns ``(m, Line)`` or ``(None, None)``. None proves nothing: a query
+        cut off by `seconds` looks exactly like one that found no mate.
+        """
+        try:
+            info = self.engine.analyse(
+                board, chess.engine.Limit(mate=n, time=seconds), game=GAME_KEY)
+        except chess.engine.EngineTerminatedError:
+            raise   # run() reports a dead engine; swallowed, it reads as a timeout
+        except chess.engine.EngineError:
+            return None, None
+        score, pv = info.get("score"), info.get("pv")
+        if score is None or not pv:
+            return None, None
+        pov = score.pov(board.turn)
+        if not pov.is_mate() or not (0 < pov.mate() <= n):
+            return None, None
+        return pov.mate(), self._fill_pv(
+            board, pov.mate(), Line(None, score, list(pv), proved=True))
+
+    def _fill_pv(self, board, n, line, seconds=FILL_PV_TIME):
         """A mate query often returns a truncated PV; a short search over the
         now-warm hash table recovers the full line. The short PV is kept when it
-        does not."""
+        does not.
+
+        Until 2.30.0 the search had a depth and no clock. For the ladder's mates
+        of 1 to 5 that is depth 12 at most and harmless; the direct mate query
+        and the re-probe hand it mates of 17 and more, depth 36 and up, with
+        nothing to stop it. Capped by `seconds` and by the budget, it gives up
+        the longer line rather than the time.
+        """
+        seconds = max(0.1, min(seconds, self.left()))
         try:
             full = self.engine.analyse(
-                board, chess.engine.Limit(depth=2 * n + 2), game=GAME_KEY)
+                board, chess.engine.Limit(depth=2 * n + 2, time=seconds),
+                game=GAME_KEY)
         except chess.engine.EngineTerminatedError:
             raise   # run() reports a dead engine; swallowed, it reads as a timeout
         except chess.engine.EngineError:
@@ -1534,6 +1591,30 @@ def run(args):
             best, best_score = top.pv[0], top.score.pov(side)
             lines = {1: top}
 
+        # 1a. A huge score and no mate: ask for the mate directly. The search
+        #     answers "how good", and on a long mate it can settle on +60 or
+        #     +90 without ever reporting the mate; `go mate n` answers "is there
+        #     a mate", which is the question. Only above DEEP_MATE_FROM, so an
+        #     ordinary winning position pays nothing.
+        if (args.deep_mate > 0 and args.deep_mate_time > 0 and not args.fast
+                and not args.nodes and not best_score.is_mate()
+                and best_score.score() >= DEEP_MATE_FROM
+                and ses.left() > args.deep_mate_time + 1.0):
+            deep_n, deep_line = ses.probe_deep(
+                board, args.deep_mate, args.deep_mate_time)
+            if deep_n is not None:
+                print(t("deep_found", n=deep_n, score=fmt(best_score)))
+                top = deep_line
+                best, best_score = top.pv[0], top.score.pov(side)
+                lines = {1: top}
+                outcome = t("deep_found_short", n=deep_n)
+            else:
+                print(t("deep_none", n=args.deep_mate, s=args.deep_mate_time,
+                        score=fmt(best_score)))
+                outcome = t("deep_none_short")
+            tl.stage(t("st_deep", n=args.deep_mate, s=args.deep_mate_time,
+                       outcome=outcome))
+
         # 1b. Re-probe the shorter distances, but only once a mate is known to
         #     exist. The first ladder is deliberately fast -- its cost is paid
         #     by every position, and most positions have no mate at all -- and
@@ -1799,6 +1880,11 @@ def parse_args(argv):
     p.add_argument("--reprobe-step", type=float, default=3.0, metavar="SEC",
                    help="seconds per rung when the shorter distances are "
                         "re-asked after a mate has been found; 0 disables it")
+    p.add_argument("--deep-mate", type=int, default=30, metavar="N",
+                   help="when the main search ends at +20 or more with no mate, "
+                        "ask directly for a mate in at most N; 0 disables it")
+    p.add_argument("--deep-mate-time", type=float, default=3.0, metavar="SEC",
+                   help="seconds for that single mate query")
     p.add_argument("--nodes", type=int, default=None,
                    help="cap the search by node count instead of time: the result "
                         "reproduces exactly, but the convergence stop is switched "

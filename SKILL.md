@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.29.3"
+  version: "2.30.0"
 description: >-
   Deliver a verdict on a chess position with Stockfish: read the position from a
   diagram image or a FEN string, confirm the reading is legal and the right way
@@ -94,7 +94,7 @@ If the network blocks the recognizer's install, say so and read the position str
 
 **If python-chess itself will not install, nothing here runs.** Say so plainly, and do not analyse the position by hand as though the engine had. (`--use-pep517` is in the setup line because python-chess 1.11 ships as source only, and some images cannot build it without it.)
 
-**`STOCKFISH STOPPED ON THIS POSITION` is the same case for one position.** Newer Stockfish refuses some positions no game can reach, such as nine pawns a side. Pass on the engine's reason, say no verdict was computed, and do not analyse by hand as though the engine had.
+**`STOCKFISH STOPPED ON THIS POSITION` is the same case for one position** (newer Stockfish refuses e.g. nine pawns a side): pass on its reason, say no verdict was computed, and do not analyse by hand.
 
 ## Step 1 — Get a FEN
 
@@ -188,6 +188,7 @@ What it does internally, and why:
 * **A mate ladder runs before the main search** — `go mate n` for n = 1 up to `--mate-probe` (default 5), `--probe-step` 0.3 s a rung, about 1.7 s on a position with no short mate. A mate it proves outranks the main search, and such a line says `proved by a mate-only search` in place of a depth. A ladder the budget stops says how far it got: `no mate up to N` means N rungs actually ran.
 * **When the source announces the length** — "mate in 8", a problem under a diagram, an EPD `bm #9` — **pass it: `--mate-probe N --probe-step 3`.** The default ceiling of 5 sits below the centre of mass of composed problems, so the ladder never asks the question the problem already answered. This costs 25–35 s. Where the mate stays missed at every setting, that is the engine's own limit: report the evaluation and say the mate was not proved.
 * **Once a mate in m is in hand, one slow rung asks whether anything shorter exists** (`--reprobe-step`, default 3 s), and the move the main search preferred is kept as the runner-up.
+* **+20 or more with no mate triggers one direct query** for a mate in up to `--deep-mate` (default 30, 3 s); a mate it finds replaces the score.
 * **The search stops when it converges**, or as soon as a mate is proven; `--time` (default 5 s) is a soft ceiling, not the normal exit.
 * **The second-best move comes from the same search** (`MultiPV=2`), so both share a depth; the gap is judged in winning chances rather than centipawns, and mates get their own label. `--no-second` drops it and roughly halves the main search.
 * **Defences come from one search after the best move** (`--defences`, default 4). The evaluation after the best move already assumes the best reply: the list explains the win, it does not establish it.

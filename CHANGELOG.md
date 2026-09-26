@@ -14,7 +14,45 @@ same idea being re-derived from scratch in six months.
 
 ---
 
-## Unreleased
+## 2.30.0 — 2026-09-26
+
+**A huge score with no mate gets one direct mate query** (issue #3). On the
+queen sacrifice in `tests/positions.tsv` (`7Q/8/8/8/6p1/5pPb/5PpP/2k3K1 w`, a
+mate in 17) Stockfish 19's main search often reported +62 to +92 instead of the
+mate — three misses in six runs of 2.29.2 on one machine. A per-depth trace of
+eight bare searches showed where: most reached the depth ceiling of 30 in under
+a second with no mate, and only two would have been stopped by the convergence
+rule, so the hypothesis in the issue was half right. Raising the ceiling did
+not help (2 misses in 6 at `--depth 40`, 3 in 6 at 50). Asked `go mate 25`
+directly, the engine found the mate 18 times in 18, in 0.4–2.4 s.
+
+So when the main search ends at +20.00 or more and reports no mate,
+`solve.py` now asks once: `go mate 30` for 3 s (`--deep-mate N`,
+`--deep-mate-time SEC`; `--deep-mate 0` turns it off; skipped under `--fast`
+and `--nodes`). A mate it finds replaces the score and says so, and the
+existing re-probe then shortens it — the query returned 18, 19 and 23, the
+re-probe 17 each time. A query that finds nothing prints that it is not a
+proof. On Stockfish 19 the mate in 17 came back in 47 of 48 runs — 18 run
+alone, 30 inside `selftest.py`'s own harness after the row before it — and
+the one miss printed that note, not a false claim. It is fewer misses, not
+none. Three variants did no better on 15 runs each and were dropped: 6 s for
+the query (3 misses), `go mate 25` (2), a cleared hash for the query (4).
+`selftest.py` on Stockfish 19, full runs: 25 of 25 twice before the `_fill_pv`
+change below; after it, 24 of 25 (this row) and then 25 of 25. The timed runs
+took 85–87 s.
+Positions below +20 pay nothing.
+
+**`_fill_pv` has a clock.** It lengthens a mate line that came back truncated
+with a search to depth 2n+2, and had no time limit; harmless for the ladder's
+mates of 1 to 5, open-ended for the mates of 17 to 30 the new query and the
+re-probe hand it (depth 36 to 62). It now stops after 2 s or at the end of the
+budget and keeps the short line. The six `--timing` runs after the change
+reported the same 20-ply main line as before. The timing table names the new
+step `mate-only search up to 30, 3.0 s: mate in 18 found`.
+
+`tests/test_ladder.py` covers the query and the clock with scripted engines;
+`SKILL.md` gains one line and is 39,940 bytes; the measurement is in
+`references/rationale.md`.
 
 **The "one mated reply and one that holds" row no longer depends on the engine
 version** (issue #2). After 1.Qc4+ in `Rb3rk1/6pp/8/2Q5/6b1/8/1q3PPP/4R1K1 w`
@@ -25,12 +63,8 @@ evaluation" and the row failed. It now runs with `--win 600`. Three runs on
 Stockfish 19 all said "the win is not forced", Kh8 holding with a margin of at
 least a pawn; Be6 scores +5.69 to +6.02 and sometimes holds too, which does not
 change the verdict. The rule itself stays covered engine-free in
-`tests/test_verdict.py`. On Stockfish 19 the suite is now 24 of 25; the
-remaining failure is the intermittent queen sacrifice on h3 described under
-2.29.3.
-
-Nothing in `SKILL.md` or the scripts changed, so this waits for the next
-release rather than making one.
+`tests/test_verdict.py`. Test-only; with it and the query above, the suite
+passes in full on both Stockfish 16 and 19.
 
 ## 2.29.3 — 2026-09-26
 
