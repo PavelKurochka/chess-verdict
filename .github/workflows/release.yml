@@ -1,0 +1,101 @@
+# Builds chess-verdict.zip and publishes it with a release.
+#
+# Push a tag vX.Y.Z whose number matches VERSION in scripts/solve.py (and so,
+# via selftest's check, SKILL.md and CHANGELOG.md): the tests run, the archive
+# is built from the tagged tree and attached to the release. If a release for
+# that tag already exists -- written by hand with its own notes -- its notes are
+# kept and only the archive is (re)attached; otherwise the notes are the top
+# CHANGELOG.md entry under a fixed paragraph on how to install the skill.
+#
+# Run it by hand (Actions -> release -> Run workflow) to build the archive as a
+# workflow artifact without releasing anything.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tag matches VERSION in solve.py
+        id: version
+        run: |
+          version=$(sed -n 's/^VERSION = "\(.*\)"$/\1/p' scripts/solve.py)
+          echo "VERSION in solve.py: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION $version"
+            exit 1
+          fi
+
+      - name: Build chess-verdict.zip
+        run: |
+          # The Agent Skills spec wants the archive to hold a folder named after
+          # the skill. git archive takes exactly the committed tree (no CLAUDE.md,
+          # nothing .gitignore excludes) and keeps the executable bits; .github is
+          # repository plumbing, not part of the skill.
+          mkdir build
+          git archive --format=tar --prefix=chess-verdict/ HEAD -- . ':(exclude).github' \
+            | tar -x -C build
+          (cd build && zip -q -r -X ../chess-verdict.zip chess-verdict)
+
+      - name: Check the archive
+        run: |
+          unzip -Z chess-verdict.zip | tee listing.txt
+          fail() { echo "::error::$1"; exit 1; }
+          grep -q ' chess-verdict/SKILL.md$' listing.txt || fail "no chess-verdict/SKILL.md"
+          grep -q ' chess-verdict/.gitignore$' listing.txt || fail "no chess-verdict/.gitignore"
+          if grep -qE ' chess-verdict/(\.github|CLAUDE\.md)' listing.txt; then
+            fail "repository-only files got into the archive"
+          fi
+          # every script with a shebang must stay executable
+          for f in $(awk '$NF ~ /\.py$/ && $1 !~ /^-rwx/ {print $NF}' listing.txt); do
+            if [ "$(head -c2 "build/$f")" = '#!' ]; then
+              fail "lost the executable bit: $f"
+            fi
+          done
+          sha256sum chess-verdict.zip
+
+      - name: Keep the archive as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: chess-verdict-${{ steps.version.outputs.version }}
+          path: chess-verdict.zip
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "release $TAG exists; keeping its notes"
+          else
+            cat > notes.md <<'EOF'
+          Download `chess-verdict.zip` below and upload it to Claude as a skill. The archive
+          holds a `chess-verdict/` folder, as the Agent Skills spec requires; GitHub's
+          automatic "Source code" archives are named after the tag and will not load as they are.
+
+          EOF
+            # the top entry of CHANGELOG.md, without its own heading
+            awk '/^## /{n++} n==1 && !/^## /' CHANGELOG.md >> notes.md
+            printf '\nFull details in CHANGELOG.md.\n' >> notes.md
+            gh release create "$TAG" --verify-tag --title "chess-verdict $VERSION" --notes-file notes.md
+          fi
+          gh release upload "$TAG" chess-verdict.zip --clobber

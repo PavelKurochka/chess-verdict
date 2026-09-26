@@ -1,0 +1,81 @@
+# Runs the offline test files on every push to main and every pull request.
+# selftest.py runs as a separate, non-blocking job: it searches against a clock,
+# and a shared runner is slower and noisier than the machine the baseline was
+# measured on, so a miss there is a warning to look at, not a broken build.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:        # release.yml runs this before building
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: tests/ and version check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Stockfish and the rasteriser
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q stockfish librsvg2-bin
+
+      - name: Install Python packages
+        run: pip install -q chess onnxruntime pillow numpy
+
+      - name: Versions agree in CHANGELOG.md, SKILL.md and solve.py
+        run: |
+          python3 -c "import sys; sys.path.insert(0, 'scripts'); import selftest; print(selftest.check_versions()); selftest.check_description()"
+          STOCKFISH=/usr/games/stockfish python3 scripts/solve.py --version
+
+      - name: SKILL.md stays under 40 KB
+        run: |
+          size=$(stat -c %s SKILL.md)
+          echo "SKILL.md is $size bytes"
+          test "$size" -lt 40960
+
+      - name: Test files
+        run: |
+          set -o pipefail
+          for t in tests/test_*.py; do
+            echo "::group::$t"
+            python3 "$t" | tee /tmp/out.txt
+            # A test that skips itself exits 0; here every dependency is
+            # installed, so a skip means the setup above broke.
+            if grep -q '^SKIPPED' /tmp/out.txt; then
+              echo "::error file=$t::$t skipped itself -- a dependency is missing"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done
+
+  selftest:
+    name: selftest.py (timing-sensitive, non-blocking)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Stockfish and python-chess
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q stockfish librsvg2-bin
+          pip install -q chess
+
+      - name: Regression suite
+        run: python3 scripts/selftest.py
