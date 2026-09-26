@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.29.2"
+  version: "2.29.3"
 description: >-
   Deliver a verdict on a chess position with Stockfish: read the position from a
   diagram image or a FEN string, confirm the reading is legal and the right way
@@ -93,6 +93,8 @@ About 54 MB and a few seconds; the model itself ships with the skill at 1.3 MB. 
 If the network blocks the recognizer's install, say so and read the position straight off the image; the engine part works regardless.
 
 **If python-chess itself will not install, nothing here runs.** Say so plainly, and do not analyse the position by hand as though the engine had. (`--use-pep517` is in the setup line because python-chess 1.11 ships as source only, and some images cannot build it without it.)
+
+**`STOCKFISH STOPPED ON THIS POSITION` is the same case for one position.** Newer Stockfish refuses some positions no game can reach, such as nine pawns a side. Pass on the engine's reason, say no verdict was computed, and do not analyse by hand as though the engine had.
 
 ## Step 1 — Get a FEN
 

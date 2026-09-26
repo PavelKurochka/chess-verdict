@@ -285,7 +285,19 @@ def judge(expect, got, out=""):
     *move* are different failures. The move case produces a position that is
     perfectly legal, so a check keyed on ``ILLEGAL POSITION`` would pass a
     build that had stopped checking moves altogether.
+
+    ``A || B`` passes when either set of expectations holds. It exists for one
+    row, and for engine versions rather than for vagueness: Stockfish 19 exits
+    on a position with nine pawns a side that Stockfish 16 analyses, so that
+    row accepts the analysis or a clean refusal -- and still fails on the
+    traceback 2.29.2 printed, which is neither.
     """
+    if "||" in expect:
+        tried = [judge(alt, got, out) for alt in expect.split("||")]
+        if any(not b for b in tried):
+            return []
+        return [f"no alternative held; {' / '.join('; '.join(b) for b in tried)}"]
+
     bad = []
     terms = [term.strip() for term in expect.split(";") if term.strip()]
     text = [term for term in terms
@@ -388,6 +400,16 @@ def _judge_selfcheck():
         ("rejects=not legal here", None, illegal, 1),
         ("refuses=not legal here", None,
          "STOPPED AT MOVE 1 OF THE LINE ('g2h3'): not legal here.", 1),
+        # an alternative passes on either branch, and fails as a whole only
+        # when neither holds -- a crash with no reason satisfies no branch
+        ("says=unreachable; cp>=400 || rejects=STOCKFISH STOPPED", answered,
+         "unreachable", 1),
+        ("says=unreachable; cp>=400 || rejects=STOCKFISH STOPPED",
+         {"san": "a5", "mate": None, "cp": 900}, "unreachable", 0),
+        ("says=unreachable; cp>=400 || rejects=STOCKFISH STOPPED", None,
+         "STOCKFISH STOPPED ON THIS POSITION", 0),
+        ("says=unreachable; cp>=400 || rejects=STOCKFISH STOPPED", None,
+         "Traceback (most recent call last)", 1),
     ]
     for expect, got, out, want in cases:
         n = len(judge(expect, got, out))

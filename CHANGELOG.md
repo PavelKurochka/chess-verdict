@@ -14,6 +14,45 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.29.3 — 2026-09-26
+
+**A dead engine is reported, not crashed on or blamed on the clock** (issue #1).
+Stockfish 19 exits on a position it calls unsupported — nine white pawns,
+`4k3/8/8/8/P7/PPPPPPPP/8/4K3 w`, is the row in `tests/positions.tsv` that
+showed it — after printing `CRITICAL ERROR: ... Reason: Unsupported position.
+WHITE has more than 8 pawns.` Stockfish 16, which CI installs, analyses it.
+With Stockfish 19, 2.29.2 did three wrong things:
+
+- the mate ladder caught the engine's death as an ordinary `EngineError` and
+  printed "stopped … because the budget ran out" one second into thirty, with
+  advice to raise `--budget` that reproduces the crash;
+- the main search, which catches nothing, ended in a traceback, and closing the
+  dead engine printed a second one;
+- Stockfish's own reason never reached the user: python-chess sees only a dead
+  process.
+
+`EngineTerminatedError` is a subclass of `EngineError`, which is how five
+handlers in `Session` absorbed it. Each now re-raises it. `run()` catches it,
+asks a fresh engine process for its reason (`engine_refusal()`, a second or
+less) and stops with `STOCKFISH STOPPED ON THIS POSITION`, the reason, and the
+instruction not to give a verdict the engine never computed. `SKILL.md` carries
+the same rule in one paragraph beside the python-chess one; it is 39.9 KB.
+
+**`selftest.py` accepts alternatives, `A || B`**, for this row only: the
+analysis on engines that take the position, the clean refusal on those that do
+not. The 2.29.2 traceback satisfies neither. `tests/test_ladder.py` drives every
+`Session` method with an engine that is already dead: all six checks fail on the
+2.29.2 code and pass now.
+
+Measured on Windows with Stockfish 19: the nine-pawn row passes, in 1.9 s, and
+`engine_refusal()` returns the reason in 0.37 s. The suite is 23 or 24 of 25.
+One failure is issue #2, a row whose verdict sits half a pawn from `--win` and
+moves with the engine version. The other comes and goes: the queen sacrifice on
+h3 (`7Q/8/8/8/6p1/5pPb/5PpP/2k3K1 w`, mate in 17) is sometimes returned as
++65 to +92 instead of the mate. It is not this change — six runs each, the
+2.29.2 code missed the mate three times and this one once, a difference too
+small to credit — and CI on Stockfish 16 has not missed it.
+
 ## 2.29.2 — 2026-09-26
 
 Repository housekeeping; nothing in `SKILL.md` or the scripts changed except the

@@ -246,6 +246,48 @@ check("a mate found at the stop depth is reported, not the depth before",
 check("... and the second line keeps its own, earlier depth",
       lines[2].depth == 12)
 
+
+# --- a dead engine is an error, not a timeout ---------------------------------
+#
+# EngineTerminatedError is a subclass of EngineError, so every `except
+# EngineError` in Session swallowed it. On a position Stockfish 19 refuses, the
+# ladder then reported "the budget ran out" one second into thirty and advised
+# a bigger --budget. Each method must let it through to run(), which says what
+# happened.
+
+class DeadEngine:
+    def analyse(self, *args, **kwargs):
+        raise chess.engine.EngineTerminatedError("engine process died unexpectedly")
+
+    def quit(self):
+        raise chess.engine.EngineTerminatedError("engine event loop dead")
+
+
+def propagates(call):
+    try:
+        call(session(DeadEngine(), 60))
+    except chess.engine.EngineTerminatedError:
+        return True
+    return False
+
+
+for name, call in [
+        ("probe_mate", lambda s: s.probe_mate(BOARD, rungs=5, step=0.3)),
+        ("probe_shorter", lambda s: s.probe_shorter(BOARD, m=6, step=0.3)),
+        ("_fill_pv", lambda s: s._fill_pv(BOARD, 3, solve.Line(None, None, []))),
+        ("playout", lambda s: s.playout(BOARD, plies=4, step=0.1)),
+        ("evaluate_at_clock", lambda s: s.evaluate_at_clock(BOARD, seconds=0.1)),
+]:
+    check(f"{name} lets a dead engine through instead of reading it as a stop",
+          propagates(call))
+
+try:
+    session(DeadEngine(), 60).close()
+    closed = True
+except chess.engine.EngineError:
+    closed = False
+check("close() on a dead engine does not raise a second traceback", closed)
+
 print()
 if failures:
     print(f"{len(failures)} failed: {', '.join(failures)}")

@@ -28,7 +28,7 @@ rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1	nomate; |cp|<=80	the op
 r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4	nomate; |cp|<=80	quiet opening: no ladder hit, no false mate
 8/8/B1RP4/2K5/NQk5/Q7/q7/8 w - - 0 1	refuses=both kings are attacked at once	illegal and unanswerable: the reason must be in words, not a status code
 8/8/8/8/8/8/8/4K2R w - - 0 1	refuses=Black has no king	a missing king stops the run: Stockfish returns no bestmove at all
-4k3/8/8/8/P7/PPPPPPPP/8/4K3 w - - 0 1	says=unreachable from the starting position; cp>=400	nine pawns: unreachable but ordinary chess from here, so it is analysed, not refused
+4k3/8/8/8/P7/PPPPPPPP/8/4K3 w - - 0 1	says=unreachable from the starting position; cp>=400 || says=unreachable from the starting position; rejects=Stockfish stopped on this position	nine pawns: unreachable but ordinary chess, so it is analysed -- or, on an engine that refuses it (Stockfish 19), the run says so instead of crashing
 7Q/8/8/8/6p1/5pPb/5PpP/2k3K1 w - - 0 1	move=Qxh3; mate<=25	the win is a queen sacrifice on h3, playable only once the king has been driven off
 7k/8/8/8/6p1/4QpPb/5PpP/6K1 w - - 0 1	says=Position after the line: 8/7k/5Q2/8/6p1/5pPb/5PpP/6K1 b - - 3 2	--line plays the moves out; the FEN it reaches is checked, not assumed	--line "1.Qd4+ Kh7 2.Qf6" --quick
 7k/8/8/8/6p1/5pPQ/5PpP/6K1 b - - 0 1	rejects=not legal here	a black pawn on g2 does not capture backwards onto h3; the placement such a move would reach is legal, so only the move check catches it	--line g2h3

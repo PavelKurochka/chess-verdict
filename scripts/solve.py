@@ -70,7 +70,7 @@ GAME_KEY = "chess-verdict"  # shared key: no ucinewgame, the hash survives
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.29.2"
+VERSION = "2.29.3"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -303,6 +303,13 @@ TEXT = {
                  "`apt-get install -y stockfish`, or point the STOCKFISH "
                  "environment variable at the binary. Nothing was analysed; "
                  "the reading above, if any, still stands.",
+    "engine_stopped": "STOCKFISH STOPPED ON THIS POSITION and returned no "
+                      "analysis{why}. Newer Stockfish versions refuse some "
+                      "positions no game can reach -- more than eight pawns a "
+                      "side is one; Stockfish 16 still analyses them. No "
+                      "verdict was computed: do not give one as though the "
+                      "engine had. The reading above, if any, still stands.",
+    "engine_stopped_why": " -- it said: {reason}",
     "no_line": "The engine returned no line -- raise --time",
     "best": "\nBest move: {san}   evaluation {score}   ({where}, {dt:.1f} s)",
     "second": "Second best: {san}   {score}   ({where}){tail}",
@@ -853,6 +860,28 @@ class Line:
         self.proved = proved
 
 
+def engine_refusal(fen, timeout=5.0):
+    """Ask a fresh engine why it will not take `fen`; its own words, or None.
+
+    Stockfish 19 exits on a position it considers unsupported -- nine white
+    pawns, `4k3/8/8/8/P7/PPPPPPPP/8/4K3 w`, is the case that surfaced this --
+    after printing `info string CRITICAL ERROR: ... Reason: ...`. python-chess
+    sees only the dead process, so the reason never reached the user; a second
+    process fed the same position is the cheap way to get it back.
+    """
+    try:
+        proc = subprocess.run(
+            [ENGINE_PATH], input=f"uci\nisready\nposition fen {fen}\nisready\nquit\n",
+            capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in proc.stdout.splitlines():
+        if "error" in line.lower():
+            _, sep, reason = line.partition("Reason:")
+            return (reason if sep else line.replace("info string", "")).strip(" .")
+    return None
+
+
 class Session:
     def __init__(self, budget):
         self.threads, self.hash_mb = cpu_count(), hash_size()
@@ -865,7 +894,10 @@ class Session:
         return self.deadline - time.time()
 
     def close(self):
-        self.engine.quit()
+        try:
+            self.engine.quit()
+        except chess.engine.EngineError:
+            pass                # already gone; run() has said why
 
     def evaluate_at_clock(self, board, hm=90, seconds=2.0):
         """Re-evaluate the same placement with the fifty-move counter advanced.
@@ -885,6 +917,8 @@ class Session:
         try:
             info = self.engine.analyse(
                 probe, chess.engine.Limit(time=seconds), game="fifty-probe")
+        except chess.engine.EngineTerminatedError:
+            raise   # run() reports a dead engine; swallowed, it reads as a timeout
         except chess.engine.EngineError:
             return None
         score = info.get("score")
@@ -920,6 +954,8 @@ class Session:
             try:
                 info = self.engine.analyse(
                     b, chess.engine.Limit(time=step), game="playout")
+            except chess.engine.EngineTerminatedError:
+                raise   # run() reports a dead engine; swallowed, it reads as a timeout
             except chess.engine.EngineError:
                 reason = "error"
                 break
@@ -985,6 +1021,8 @@ class Session:
             try:
                 info = self.engine.analyse(
                     board, chess.engine.Limit(mate=n, time=step), game=GAME_KEY)
+            except chess.engine.EngineTerminatedError:
+                raise   # run() reports a dead engine; swallowed, it reads as a timeout
             except chess.engine.EngineError:
                 break
             score, pv = info.get("score"), info.get("pv")
@@ -1031,6 +1069,8 @@ class Session:
             try:
                 info = self.engine.analyse(
                     board, chess.engine.Limit(mate=n, time=step), game=GAME_KEY)
+            except chess.engine.EngineTerminatedError:
+                raise   # run() reports a dead engine; swallowed, it reads as a timeout
             except chess.engine.EngineError:
                 break
             score, pv = info.get("score"), info.get("pv")
@@ -1054,6 +1094,8 @@ class Session:
         try:
             full = self.engine.analyse(
                 board, chess.engine.Limit(depth=2 * n + 2), game=GAME_KEY)
+        except chess.engine.EngineTerminatedError:
+            raise   # run() reports a dead engine; swallowed, it reads as a timeout
         except chess.engine.EngineError:
             return line
         fs, fpv = full.get("score"), full.get("pv")
@@ -1692,6 +1734,13 @@ def run(args):
             print(t("t_short", dt=time.time() - ses.started, budget=args.budget))
         if ses.left() < 1:
             print(t("budget_warn"))
+    except chess.engine.EngineTerminatedError:
+        # Until 2.29.3 this was a traceback, preceded by the mate ladder saying
+        # the budget ran out -- one second into thirty -- and advising a bigger
+        # --budget, which reproduces the crash.
+        reason = engine_refusal(board.fen())
+        sys.exit(t("engine_stopped", why=t("engine_stopped_why", reason=reason)
+                   if reason else ""))
     finally:
         ses.close()
 
