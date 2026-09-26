@@ -14,6 +14,24 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## Unreleased
+
+**The "one mated reply and one that holds" row no longer depends on the engine
+version** (issue #2). After 1.Qc4+ in `Rb3rk1/6pp/8/2Q5/6b1/8/1q3PPP/4R1K1 w`
+the row needs Kh8 to hold, and with the default `--win 400` that rested on a
+live score about half a pawn from the threshold: under 4.00 on Stockfish 16,
++4.56 to +4.94 on Stockfish 19, where the verdict correctly became "decisive by
+evaluation" and the row failed. It now runs with `--win 600`. Three runs on
+Stockfish 19 all said "the win is not forced", Kh8 holding with a margin of at
+least a pawn; Be6 scores +5.69 to +6.02 and sometimes holds too, which does not
+change the verdict. The rule itself stays covered engine-free in
+`tests/test_verdict.py`. On Stockfish 19 the suite is now 24 of 25; the
+remaining failure is the intermittent queen sacrifice on h3 described under
+2.29.3.
+
+Nothing in `SKILL.md` or the scripts changed, so this waits for the next
+release rather than making one.
+
 ## 2.29.3 — 2026-09-26
 
 **A dead engine is reported, not crashed on or blamed on the clock** (issue #1).

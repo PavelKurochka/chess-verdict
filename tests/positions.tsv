@@ -50,7 +50,7 @@ r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4	nomate; |cp|
 # runs are back to back. A row that red-flags on load teaches the suite to be
 # ignored. That rule stays covered by constructed tables in test_verdict.py,
 # which is what a rule about reporting an unresolved search needs.
-Rb3rk1/6pp/8/2Q5/6b1/8/1q3PPP/4R1K1 w - - 0 1	move=Qc4+; says=the win is not forced	one mated reply and one that holds is ordinary: the verdict stays "not forced"	--scan full
+Rb3rk1/6pp/8/2Q5/6b1/8/1q3PPP/4R1K1 w - - 0 1	move=Qc4+; says=the win is not forced	one mated reply and one that holds is ordinary: the verdict stays "not forced" (--win 600: Kh8 scores about +4.6 on Stockfish 19, too close to the default 400)	--scan full --win 600
 5k2/4pp2/5bp1/4q2p/3N4/2p1nQ1P/P1P5/K3R3 b - - 0 1	mate<=4; says=every reply loses	a mating net enumerates in full and the list is the proof	--scan full
 6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1	mate=1; says=The opponent has no moves	mate on the board: the enumeration branch is skipped, not emptied	--scan full
 8/p7/kpP5/qrp1b3/rpP2b2/pP2b3/P7/K7 w - - 0 1	says=an evaluation, not a proof	a fortress after 1.Kb1: every reply is +10 in centipawns and the position is a draw; this printed "the win is forced" until 2.27.0	--line Kb1 --scan full
