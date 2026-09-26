@@ -7,6 +7,10 @@
 *Compared against `chess-best-move` as of August 2026. That skill may have
 changed since; the observations below are dated, not permanent.*
 
+*Note: `chess-best-move` was removed from `letta-ai/skills` in March 2026
+([commit `6017653`](https://github.com/letta-ai/skills/commit/6017653d0ee818071495a018402194e358c00360));
+links to that repository below point to where it used to live.*
+
 The closest neighbour to this skill is [`chess-best-move`](https://github.com/letta-ai/skills)
 from the `letta-ai/skills` repository. The two overlap enough that the question
 deserves an answer, and the answer is not "one is better" — they are built on
@@ -541,7 +545,7 @@ on every run.
 
 ## Sources
 
-- [`letta-ai/skills` — repository](https://github.com/letta-ai/skills)
+- [`letta-ai/skills` — repository](https://github.com/letta-ai/skills) — `chess-best-move` was removed from it in March 2026
 - [README.md](README.md) — install, usage and flags for this skill
 - [`chess-best-move` — full SKILL.md text](https://agentskills.so/skills/letta-ai-skills-chess-best-move)
 - [Lichess Accuracy metric](https://lichess.org/page/accuracy) — origin of the constant `0.00368208`

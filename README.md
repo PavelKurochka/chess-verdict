@@ -286,7 +286,8 @@ this is a pipeline with the engine policy in code. Run on the same position, bot
 returned `Qc4+` — one after ~1.7 s of engine time, the other after ~11.5 minutes
 across five cold engine launches. This skill also reports how strong the
 resulting claim is allowed to be, which the other does not attempt; that skill's
-per-square vision procedure is the more explicit of the two.
+per-square vision procedure is the more explicit of the two. (`chess-best-move`
+was removed from `letta-ai/skills` in March 2026.)
 
 **[Full comparison, including where `chess-best-move` is the better choice → FAQ.md](FAQ.md)**
 
