@@ -1,0 +1,58 @@
+# Regression positions for scripts/selftest.py
+#
+# Tab-separated: FEN <TAB> expectations <TAB> note
+# Expectations are separated by ";" -- see judge() in selftest.py for the forms.
+#
+# Two conventions worth keeping when adding rows:
+#
+#  * Prefer "mate<=N" over "mate=N". A shorter mate than the one published with
+#    the problem is a better answer, not a failure, and pinning the exact number
+#    turns every genuine improvement into a red row.
+#  * Prefer a centipawn floor ("cp>=400") over a window. Evaluations of the same
+#    position drift by half a pawn between runs -- the hash table is warm after
+#    the mate ladder and cold without it -- so a tight window fails at random
+#    and teaches nobody anything.
+#
+# The first two rows are the reason this file exists: both are mates that the
+# ordinary search prunes away and only the `go mate n` ladder finds.
+
+5k2/4pp2/5bp1/4q2p/3N4/2p1nQ1P/P1P5/K3R3 b - - 0 1	move=Nxc2+; mate<=4	the regression: plain search reported Qb8 +4.78
+r2qkbnr/pp2nppp/3p4/2pNN1B1/2BnP3/3P4/PPP2PPP/R2bK2R w KQkq - 0 1	mate<=2	composed mate the search prunes
+1r6/3p3n/7p/2r3pR/8/3P1P1P/B2pPkNQ/2bK4 w - - 0 1	mate<=6	ladder finds Be6 mate in 4; plain search sees 6
+r1bq1rk1/pp1n1p1p/5P2/1B3p2/3B3b/PR6/2PQ2PP/3K3R w - - 0 1	move=Rg3+; mate<=8	mating attack, rook sacrifice first
+6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1	move=Ra8#; mate=1	back rank, mate in one
+5rrk/1p1n3p/4pp1Q/3pP3/p2N3P/P2P2P1/4qPK1/1R5R b - - 0 1	move=Rxg3+; cp>=400	decisive but not a mate at this depth
+1n1r1rk1/2R2p1p/4p1pq/1p6/4R3/Q1P2N2/PP3PPP/6K1 b - - 0 1	move=Qf4; cp>=400	Qf4 exploits the pinned rook on e4
+Rb3rk1/6pp/8/2Q5/6b1/8/1q3PPP/4R1K1 w - - 0 1	move=Qc4+; cp>=250	wins the exchange; the win is NOT forced
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1	nomate; |cp|<=80	the opening position is not winning for anyone
+r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4	nomate; |cp|<=80	quiet opening: no ladder hit, no false mate
+8/8/B1RP4/2K5/NQk5/Q7/q7/8 w - - 0 1	refuses=both kings are attacked at once	illegal and unanswerable: the reason must be in words, not a status code
+8/8/8/8/8/8/8/4K2R w - - 0 1	refuses=Black has no king	a missing king stops the run: Stockfish returns no bestmove at all
+4k3/8/8/8/P7/PPPPPPPP/8/4K3 w - - 0 1	says=unreachable from the starting position; cp>=400	nine pawns: unreachable but ordinary chess from here, so it is analysed, not refused
+7Q/8/8/8/6p1/5pPb/5PpP/2k3K1 w - - 0 1	move=Qxh3; mate<=25	the win is a queen sacrifice on h3, playable only once the king has been driven off
+7k/8/8/8/6p1/4QpPb/5PpP/6K1 w - - 0 1	says=Position after the line: 8/7k/5Q2/8/6p1/5pPb/5PpP/6K1 b - - 3 2	--line plays the moves out; the FEN it reaches is checked, not assumed	--line "1.Qd4+ Kh7 2.Qf6" --quick
+7k/8/8/8/6p1/5pPQ/5PpP/6K1 b - - 0 1	rejects=not legal here	a black pawn on g2 does not capture backwards onto h3; the placement such a move would reach is legal, so only the move check catches it	--line g2h3
+7k/8/8/8/6p1/5pPQ/5PpP/6K1 b - - 0 1	rejects=not a move this program can read	an unreadable token is a different failure from an illegal one and must say which	--line "gxh3 zz9"
+
+# Flags and fields that decide the answer and used to be filled in silently.
+# Both rows are refusals, so they cost no search time.
+8/8/8/4k3/8/8/8/4KBN1	rejects=does not say whose move it is	a placement with no side-to-move field parses and comes back as White: the one guess this skill forbids everywhere else
+8/8/8/4k3/8/8/8/4KBN1 w - - 0 1	rejects=cannot be combined with --quick	--quick switches the defence analysis off, so --defences would decide nothing; the banner used to advertise it as a setting in force	--defences 6 --quick
+
+# The full-enumeration path. selftest runs --scan off everywhere else, so until
+# these rows the verdict branches had no end-to-end cover at all: only the two
+# helpers under them, in test_verdict.py.
+#
+# headline_understates() is deliberately NOT covered from end to end. Its
+# condition is "the search resolved some replies and not others", which is a
+# fact about how fast the machine was, not about the position: the row tried
+# here fired on 6 of 6 standalone runs and failed inside the suite, where the
+# runs are back to back. A row that red-flags on load teaches the suite to be
+# ignored. That rule stays covered by constructed tables in test_verdict.py,
+# which is what a rule about reporting an unresolved search needs.
+Rb3rk1/6pp/8/2Q5/6b1/8/1q3PPP/4R1K1 w - - 0 1	move=Qc4+; says=the win is not forced	one mated reply and one that holds is ordinary: the verdict stays "not forced"	--scan full
+5k2/4pp2/5bp1/4q2p/3N4/2p1nQ1P/P1P5/K3R3 b - - 0 1	mate<=4; says=every reply loses	a mating net enumerates in full and the list is the proof	--scan full
+6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1	mate=1; says=The opponent has no moves	mate on the board: the enumeration branch is skipped, not emptied	--scan full
+8/p7/kpP5/qrp1b3/rpP2b2/pP2b3/P7/K7 w - - 0 1	says=an evaluation, not a proof	a fortress after 1.Kb1: every reply is +10 in centipawns and the position is a draw; this printed "the win is forced" until 2.27.0	--line Kb1 --scan full
+5rrk/1p1n3p/4pp1Q/3pP3/p2N3P/P2P2P1/4qPK1/1R5R b - - 0 1	says=rendered from White's side	a Black-to-move position from a book diagram, White at the bottom: --view white must draw it that way	--view white --quick
+r1bq1rk1/pp1n1p1p/5P2/1B3p2/3B3b/PR6/2PQ2PP/3K3R w - - 0 1	mate<=8	with the ladder off the main search must keep the mate it finds; it returned +9.96 at depth 12 until 2.28.0	--mate-probe 0

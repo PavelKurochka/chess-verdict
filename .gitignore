@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Diagrams solve.py and compare.py write next to a run when no output
+# directory exists. They are outputs of an analysis, not part of the skill.
+board.png
+board.svg
+compare.png
+compare.svg
+
+# The packaged skill, built from this tree rather than committed.
+chess-verdict.zip
+
+.DS_Store
