@@ -14,6 +14,23 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## Unreleased
+
+**Three endgames with tablebase truth in `tests/hard.epd`.** Until now every
+row there had a truth from analysis or a published problem; these three are
+checked against the Lichess tablebase (2026-09-27). K+N+N vs K+P
+(`8/4K3/N7/2N1p3/8/8/8/4k3 w`) is won with a DTM of 93 plies while the engine
+says about +1.2; K+B+B vs K+N (`8/8/2nB4/8/8/4k3/4B3/5K2 w`) is a cursed win,
+DTZ 119, so a draw under the fifty-move rule; and the K+B+N row repeated with
+the halfmove clock at 45 is a cursed win too, DTZ 59 plus 45. On the two
+drawn ones `solve.py` shows about +1 and says nothing of the rule; only the
+tablebase link does, which is what the rows check. Found by sampling random
+five-man positions and keeping those where Stockfish and the tablebase
+disagreed or the DTZ ran past 50; one clear disagreement in 64 random
+positions, four in 60 from the long-ending classes.
+
+---
+
 ## 2.30.0 — 2026-09-26
 
 **A huge score with no mate gets one direct mate query** (issue #3). On the
