@@ -93,8 +93,12 @@ jobs:
           automatic "Source code" archives are named after the tag and will not load as they are.
 
           EOF
-            # the top entry of CHANGELOG.md, without its own heading
-            awk '/^## /{n++} n==1 && !/^## /' CHANGELOG.md >> notes.md
+            # the top entry of CHANGELOG.md, without its own heading, the blank
+            # lines around it or the "---" that may separate it from the next
+            awk '/^## /{n++; next} n==1 {line[++k]=$0}
+              END {s=1; while (s<=k && line[s] ~ /^[ \t]*$/) s++
+                   e=k; while (e>=s && (line[e] ~ /^[ \t]*$/ || line[e]=="---")) e--
+                   for (i=s; i<=e; i++) print line[i]}' CHANGELOG.md >> notes.md
             printf '\nFull details in CHANGELOG.md.\n' >> notes.md
             gh release create "$TAG" --verify-tag --title "chess-verdict $VERSION" --notes-file notes.md
           fi
