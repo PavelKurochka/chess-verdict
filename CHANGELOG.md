@@ -14,7 +14,38 @@ same idea being re-derived from scratch in six months.
 
 ---
 
-## Unreleased
+## 2.31.0 — 2026-09-30
+
+**The tablebase is asked, not just linked.** At seven pieces or fewer
+`solve.py` now queries `tablebase.lichess.ovh` itself and prints the exact
+result right after the board link — won, drawn, lost, cursed win or blessed
+loss, DTZ, DTM as a mate distance, and the best moves with each one's outcome
+for the side playing it — and repeats the verdict as the last line of the run,
+where it cannot be lost under the engine numbers. On K+B+N vs K the run now
+says `won`, DTM 59 plies (mate in 30), next to the engine's `+2.6`; with the
+halfmove clock at 45 it says cursed win and names the clock.
+
+The query needs the host on the sandbox allowlist, which is the user's
+setting: *Domain allowlist → Additional allowed domains* in the Claude app.
+README (*Exact endgames*), SKILL.md, FAQ and the non-technical readme say so,
+and name exactly one host — `tablebase.lichess.ovh`, not `lichess.org` and
+not a wildcard. Without it the run says the allowlist refused the host and
+which setting lifts that, then carries on exactly as 2.30.0 did. A timeout,
+a 429 or an outage is reported as a failure of the day and does not send the
+user to the settings. `--tablebase off` skips the query. Six seconds is the
+ceiling on the request; four positions came back in 0.45–0.7 s from a cloud sandbox.
+
+`tests/test_tablebase.py` checks the refused/failed split offline, with
+stand-ins for `urlopen`, and the report on answers recorded from the service;
+`--live` adds one real query and prints SKIP when the host is not allowed.
+
+`SKILL.md` stays under 40 KB: 40 551 bytes. The first draft was 42 442 and
+failed the size check in CI; the new text was cut to the rules, the meaning of
+DTM, DTZ, cursed and blessed results and the JSON address moved to
+`references/rationale.md`, and the timing and reference sections were
+tightened without dropping a rule.
+
+### Also in this release
 
 **Three endgames with tablebase truth in `tests/hard.epd`.** Until now every
 row there had a truth from analysis or a published problem; these three are

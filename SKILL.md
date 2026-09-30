@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.30.0"
+  version: "2.31.0"
 description: >-
   Deliver a verdict on a chess position with Stockfish: read the position from a
   diagram image or a FEN string, confirm the reading is legal and the right way
@@ -27,7 +27,7 @@ description: >-
 
 A picture or a FEN goes in; what comes back has been checked twice — once for whether the board was read correctly, once by the engine. The verdict states its own strength: a forced mate is called a forced mate, an advantage that merely survives the defender's best try is called that and no more.
 
-After the one-time setup nothing here needs the network. Engine, recognizer and search all run locally.
+After the one-time setup nothing here needs the network except one optional query: the Lichess tablebase at seven pieces or fewer ([Exact endgames](#exact-endgames-the-one-network-setting)).
 
 **Why the steps are in this order.** In almost every position the engine is not the weak link; reading the position is. A single misplaced piece produces a syntactically perfect FEN, a confident evaluation, and a completely wrong answer. So the position gets read twice, by two different procedures, and the two readings are compared. The exceptions are narrow and recognisable before the answer is written — see [Where the engine is the weak link](#where-the-engine-is-the-weak-link).
 
@@ -41,7 +41,7 @@ Three kinds of position make Stockfish state a number confidently and wrongly, a
 
 **Fortresses.** Material says one thing and the position is a draw. A blocked structure is not by itself the trigger — an extra queen behind sixteen locked pawns still mates in 11. What matters is whether progress requires a capture or a pawn move that cannot be forced, which is what the probe below measures.
 
-**Theoretically decided endgames, because there are no tablebases.** Nothing here installs Syzygy files and `solve.py` never probes any. K+B+N against a bare king is a forced mate in at most 33 and reports about `+2.6` at any depth reached in a minute. Below eight pieces, name the ending and hand over the tablebase link (step 4).
+**Theoretically decided endgames.** Nothing here installs Syzygy files. K+B+N against a bare king is a forced mate in at most 33 and reports about `+2.6` at any depth reached in a minute. Below eight pieces `solve.py` asks the Lichess tablebase instead (step 4).
 
 **The halfmove clock, which is part of the position.** The same K+B+N placement with `90` in the fifth field evaluates `0.00` instead of `+2.57`, because the engine applies the fifty-move rule inside its search. Screenshots carry no clock, published FENs pad it to `0`, and `img2fen.py` writes `0` there unconditionally. The castling rights beside it *are* read from the home squares; the clock is still a constant, not a reading.
 
@@ -89,6 +89,16 @@ python3 scripts/stage.py "install recognizer" -- pip install onnxruntime pillow 
 ```
 
 About 54 MB and a few seconds; the model itself ships with the skill at 1.3 MB. This is cheap now, but it is still a *second* reading rather than a replacement for the first: reading the position straight off the image is the normal path.
+
+### Exact endgames: the one network setting
+
+At seven pieces or fewer `solve.py` queries `tablebase.lichess.ovh`. Reaching it is the **user's** setting: *Domain allowlist → Additional allowed domains*, exactly that one host — not `lichess.org`, not a wildcard (on Team and Enterprise an admin controls it; it may apply only in a new chat). After the board link the run prints one of:
+
+- `Tablebase (Lichess Syzygy, exact): …` — the answer; report it as in step 4.
+- `… allowlist refuses tablebase.lichess.ovh …` — tell the user once per conversation, in one sentence, which host to add and where, then carry on with the engine.
+- `… the tablebase did not answer (…)` — timeout, rate limit, outage: not a setting, so hand over the link instead.
+
+`--tablebase off` skips the query. ([Why one host](references/rationale.md#where-the-engine-is-the-weak-link).)
 
 If the network blocks the recognizer's install, say so and read the position straight off the image; the engine part works regardless.
 
@@ -271,7 +281,9 @@ When the run printed a re-probe note — *a mate in 6 was found first … that p
 
 Report evaluations as they are: `+7.2` for Black means Black is winning by roughly seven pawns, `mate in 19` means a forced mate exists but is long. Do not round a forced mate down to "winning" or inflate a small advantage.
 
-**Below eight pieces, name the ending; do not let the number stand alone.** With no tablebases the engine's score in a theoretically decided ending is a search artefact. Say which ending it is and what theory says, use the engine for the move order, and hand the user the exact answer: the Lichess link `solve.py` prints shows the tablebase in the analysis board's explorer panel, and `https://tablebase.lichess.ovh/standard?fen=<FEN, spaces as underscores>` is the same data as JSON — result, distance to zeroing, distance to mate and every legal move ranked. This container cannot call either (`403 host_not_allowed`), so they are for the user to open.
+**Below eight pieces, the tablebase is the verdict when it answered.** The `Tablebase (Lichess Syzygy, exact)` block is a proof and outranks every engine number (the run repeats it as its last line). Report the result, its best moves, and the distance as `mate in N`. For a *cursed win* or *blessed loss* say so, and that the halfmove clock — assumed, from a diagram — decides it. The engine line may explain the plan, never the result.
+
+**When the tablebase did not answer, name the ending; do not let the number stand alone.** The engine's score in a theoretically decided ending is a search artefact. Say which ending it is and what theory says, use the engine for the move order, and hand over the Lichess link `solve.py` prints: its analysis board shows the tablebase in the explorer panel.
 
 **When most of the reply list is mated and the headline is not, believe the reply list.** The script says this itself in place of the verdict line that would contradict it, on both the sampled and the full-enumeration paths. A defence that is mated proves the position mates at least down that branch; a headline in centipawns only means the search did not resolve the others, and the verdict line derived from it inherits the same error. Say the position is mating and that the distance is not established — and do not try to fix it with settings, which does not work. ([The position this was written on](references/rationale.md#the-verdict).)
 
@@ -287,9 +299,7 @@ The journal records the whole chain — installs, diagram reading, every `solve.
 
 **It has to be stopped.** `--stop` ends the span after the last command; a later command reopens it. A report on a journal that was never stopped still prints, but its coverage line says the number includes idle time, so the failure is visible rather than silent. ([Why this was added](references/rationale.md#timing).)
 
-**Do not print the table unless the user asks for it.** A ten-row breakdown after every puzzle is noise, and much of the total is usually the assistant thinking between commands rather than work the user cares about.
-
-**But say the table exists when the run was slow enough to matter** — an install, a wait the user noticed, or the budget warning — with one short closing line such as *"I can show where the time went, if that's useful"*. Never after a quick answer, and never the table itself unasked.
+**Do not print the table unless the user asks for it** — after every puzzle it is noise. **But when the run was slow enough to matter** — an install, a wait the user noticed, the budget warning — offer it in one closing line such as *"I can show where the time went, if that's useful"*. Never after a quick answer.
 
 When they do ask:
 
@@ -299,20 +309,20 @@ python3 scripts/stage.py --report
 
 Give it whole when giving it at all — installs, diagram reading, every run with its stages, and the remainder row — and note what dominates if a line genuinely needs explaining.
 
-The remainder row is split into gaps, each named after the command that followed it. A large gap is either a step that was never bracketed — the diagram read by hand, most often — or the assistant composing between calls; the table cannot tell them apart, so say which. `references/timing.md` has the mechanics.
+The remainder row is split into gaps named after the command that followed each. A large gap is an unbracketed step (most often the diagram read by hand) or the assistant composing between calls; the table cannot tell them apart, so say which. Mechanics: `references/timing.md`.
 
 ## When the answer is not a puzzle
 
 The same pipeline serves other questions. For "who stands better and why", run `--quick` and report the evaluation with the main plans for both sides. For "was this move a mistake", analyse the position before and after and compare evaluations — two `--quick` runs are enough, and they keep the mate ladder, so the comparison is not mate-blind; do not reach for `--fast` here. For opening positions, note that the engine's preference is not the same as theory and say so.
 
-Quiet and endgame positions are where evaluations drift with depth. If the assessment matters, raise `--time` and `--min-depth` together and say which depth the number came from. In an endgame, check the piece count first: at seven or fewer, depth is the wrong tool and the tablebase link in step 4 is the right one.
+Quiet and endgame positions are where evaluations drift with depth. If the assessment matters, raise `--time` and `--min-depth` together and say which depth the number came from. In an endgame, check the piece count first: at seven or fewer, depth is the wrong tool and the tablebase in step 4 is the right one.
 
 ## Reference
 
-`references/reading-diagrams.md` — how to read a diagram into FEN by hand when the recognizer is unavailable or wrong, with the sanity checks that catch the usual errors.
+`references/reading-diagrams.md` — reading a diagram into FEN by hand when the recognizer is unavailable or wrong, with the sanity checks.
 
-`references/timing.md` — the timing journal: what it records, how to bracket steps that have no command, how to read the table, and when to offer it.
+`references/timing.md` — the timing journal: what it records, bracketing steps with no command, reading the table.
 
-`references/testing.md` — the regression suites, the matetrack baseline, the positions no suite covers, and what each test file is for. Only needed when editing the scripts.
+`references/testing.md` — the regression suites and what each test file is for. Only for editing the scripts.
 
-`references/rationale.md` — the evidence behind the rules above: the positions they were derived from, the measurements, and the approaches that were tried and did not work. Read it when changing a rule, not when applying one.
+`references/rationale.md` — the evidence behind the rules: positions, measurements, rejected approaches. Read it when changing a rule, not when applying one.

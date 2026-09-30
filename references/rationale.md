@@ -32,6 +32,31 @@ step 4 would turn into "White is about two and a half pawns better". The engine
 converts the position in self-play — in 42 moves rather than 33 — so it wins it
 without knowing it is won.
 
+**2.31.0: asking the tablebase, and why only one host.** Until this release the
+host was refused by the sandbox (`403 host_not_allowed`) and the skill could
+only print its URL. The Claude app lets the user extend the sandbox allowlist,
+and with `tablebase.lichess.ovh` added the query returns in well under a second:
+K+B+N with the clock at 0 comes back `win`, DTZ 59, DTM 59 plies — mate in 30 —
+against the engine's `+2.6`. Only that host is documented. `lichess.org` is not
+needed (the analysis link is for the user's browser), the opening explorer on
+`explorer.lichess.ovh` now answers 401 without a personal token and the skill
+does not use it, and every extra domain is one more way out of the sandbox.
+The refusal is told apart from an ordinary failure because they need different
+answers: the first sends the user to one setting, the second must not — a
+rate limit is not fixed by settings, and sending someone there for it teaches
+them the message is noise. Through the sandbox proxy a refusal is a failed
+CONNECT, `Tunnel connection failed: 403`; through a plain HTTP proxy a 403 or
+407 whose body names the policy. Both are matched; `tests/test_tablebase.py`
+pins the split.
+
+Moved from `SKILL.md` to keep it under 40 KB: a *cursed win* is won on the
+board but drawn by the fifty-move rule, a *blessed loss* the reverse, and the
+halfmove clock decides which — an assumption when the position came from a
+diagram. DTM counts as if the fifty-move rule did not exist; DTZ is the number
+the rule is measured against. When the query fails, the same data is at
+`https://tablebase.lichess.ovh/standard?fen=<FEN, spaces as underscores>` as
+JSON — result, DTZ, DTM and every legal move ranked — for the user to open.
+
 **The halfmove clock.** The same placement with `90` in the fifth field
 evaluates `0.00` instead of `+2.57`, because the engine applies the fifty-move
 rule inside its search and ten plies is not enough to mate.

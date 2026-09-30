@@ -31,7 +31,9 @@ the main search rather than from its own hits. The flags that lengthen or remove
 it are under [Flags worth knowing](#flags-worth-knowing), the measurements under
 [Limitations](#limitations).
 
-After the one-time setup nothing here needs the network. Engine, recognizer and
+After the one-time setup nothing here needs the network, with one optional
+exception: at seven pieces or fewer `solve.py` asks the Lichess tablebase for the
+exact result ([Exact endgames](#exact-endgames-optional)). Engine, recognizer and
 search all run locally.
 
 This page is written for someone who will run the scripts. For a chess player who
@@ -73,6 +75,30 @@ About 54 MB and a few seconds. The model itself ships with the skill, 1.3 MB
 of it, in `scripts/vendor/fenshot/`. It is optional by design: reading the
 diagram directly is usually faster, and the recognizer serves as a cross-check
 rather than the primary path.
+
+### Exact endgames (optional)
+
+At seven pieces or fewer the exact result is a tablebase lookup, and `solve.py`
+makes it against the Lichess Syzygy service. In the Claude app the code runs in
+a sandbox whose network is restricted to package registries by default, so the
+host has to be allowed by hand, once:
+
+1. Open the app's **Settings** and find **Domain allowlist**.
+2. Under **Additional allowed domains**, enter `tablebase.lichess.ovh` and press
+   **Add**.
+3. Start a new chat — the change may not reach one already open.
+
+That single host is all the skill needs: not `lichess.org`, not a wildcard such
+as `*.lichess.ovh`. Every allowed domain is also a way out of the sandbox, so
+add no more than that. On Team and Enterprise plans the allowlist belongs to the
+organisation and an admin has to add it.
+
+Without the setting nothing breaks. The run says the host was refused and names
+the setting, gives the engine's evaluation as before, and prints the tablebase
+URL for you to open in a browser. A timeout or a rate limit from Lichess is
+reported as such and does not send you to the settings. `--tablebase off`
+skips the query altogether. In Claude Code on your own machine there is no
+allowlist and the query simply works.
 
 ---
 
@@ -217,6 +243,7 @@ good on book diagrams.
 | `--budget` | 30 s | Overall backstop for the whole analysis |
 | `--quick` | — | Evaluation only; the mate ladder still runs |
 | `--fast` | — | Evaluation only **and** the ladder off — not for sharp positions |
+| `--tablebase` | `auto` | At ≤7 pieces ask the Lichess tablebase; `off` prints only its URL |
 | `--fifty-probe` | `auto` | Re-check the evaluation with the halfmove clock at 90 |
 | `--playout N` | — | Play the position out against itself; report the first clock reset |
 | `--view auto\|white\|black` | auto | Side the diagram, letter grid and Lichess link are drawn from; pass the source image's side |
@@ -251,7 +278,8 @@ chess-verdict/
 │   ├── hard.epd                    engine blind spots, checked by hand
 │   ├── test_stage.py               the timing journal's start/stop behaviour
 │   ├── test_compare.py             the board detector, on synthetic diagrams
-│   └── test_verdict.py             the reporting rule, on constructed tables
+│   ├── test_verdict.py             the reporting rule, on constructed tables
+│   └── test_tablebase.py           the tablebase probe: refused vs failed, report
 └── scripts/
     ├── solve.py                    search, mate ladder, gap, verdict
     ├── img2fen.py                  diagram → FEN, with orientation handling
@@ -305,11 +333,12 @@ Three of these are the engine's, not the pipeline's, and no flag reaches them.
   they do not fix the number. The probe is also one-sided — a won rook ending
   fails it exactly as a fortress does, which is why its note stops short of
   calling anything a draw.
-- **No tablebases.** K+B+N against a bare king is a forced mate in at most 33 and
-  reads `+2.68` at depth 22, `+2.57` at depth 30. Below eight pieces, name the
-  ending rather than quoting the number, and use
-  `https://tablebase.lichess.ovh/standard?fen=…` for the exact answer — from a
-  browser, since the container's egress proxy refuses that host.
+- **No local tablebases.** K+B+N against a bare king is a forced mate in at most
+  33 and reads `+2.68` at depth 22, `+2.57` at depth 30. Since 2.31.0 `solve.py`
+  asks the Lichess tablebase instead, but only where the sandbox may reach it
+  ([Exact endgames](#exact-endgames-optional)). Where it may not, name the ending
+  rather than quoting the number, and open
+  `https://tablebase.lichess.ovh/standard?fen=…` in a browser.
 - **The fifth FEN field is part of the position.** The same endgame evaluates
   `+2.57` with `0` in the halfmove field and `0.00` with `90`. Diagrams carry no
   clock and `img2fen.py` writes `0` unconditionally, along with `-` for castling

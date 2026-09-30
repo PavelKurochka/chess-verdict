@@ -47,6 +47,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
+import json
 
 try:
     import chess
@@ -72,12 +75,19 @@ DEEP_MATE_FROM = 2000
 # Seconds allowed to lengthen a mate line that came back truncated (_fill_pv).
 # Past it the short line is kept: a longer line is not worth an open-ended wait.
 FILL_PV_TIME = 2.0
+# The Lichess Syzygy service. The one host this skill talks to after setup, and
+# only at seven men or fewer. A sandbox reaches it only when the user has put
+# it on the allowlist (README, "Exact endgames"); without that the probe below
+# says so and the run carries on exactly as before 2.31.0.
+TABLEBASE_HOST = "tablebase.lichess.ovh"
+TABLEBASE_URL = f"https://{TABLEBASE_HOST}/standard?fen="
+TABLEBASE_TIMEOUT = 6.0
 
 #: Build identity. Must match `metadata.version` in SKILL.md's frontmatter and
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.30.0"
+VERSION = "2.31.0"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -176,6 +186,45 @@ TEXT = {
                "query, not a search. For the user: the Lichess link above "
                "shows it in the analysis board's explorer panel. The same "
                "data as JSON: {url}",
+    "tb_header": "Tablebase (Lichess Syzygy, exact): {side} to move -- "
+                 "{verdict}.",
+    "tb_numbers": "  DTZ {dtz}{dtm}. {rule}",
+    "tb_dtm": ", DTM {plies} plies ({mate})",
+    "tb_rule_fine": "",
+    "tb_rule_cursed": "The fifty-move rule decides it: DTZ plus the halfmove "
+                      "clock ({hm}) runs past 100 plies. DTM counts as if the rule did not exist.",
+    "tb_rule_maybe": "DTZ is rounded here, so whether the fifty-move rule "
+                     "intervenes is not certain.",
+    "tb_moves": "  Moves, best first: {moves}",
+    "tb_url": "  JSON: {url}",
+    "tb_w_win": "won", "tb_w_loss": "lost", "tb_w_draw": "drawn",
+    "tb_w_cursed-win": "won on the board, drawn by the fifty-move rule "
+                       "(cursed win)",
+    "tb_w_blessed-loss": "lost on the board, saved by the fifty-move rule "
+                         "(blessed loss)",
+    "tb_w_maybe-win": "won, unless the fifty-move rule intervenes",
+    "tb_w_maybe-loss": "lost, unless the fifty-move rule intervenes",
+    "tb_w_unknown": "not answered by the tablebase",
+    "tb_m_win": "wins", "tb_m_loss": "loses", "tb_m_draw": "draws",
+    "tb_m_cursed-win": "cursed win", "tb_m_blessed-loss": "blessed loss",
+    "tb_m_maybe-win": "wins?", "tb_m_maybe-loss": "loses?",
+    "tb_m_unknown": "?",
+    "tb_mate_for": "mate in {n}", "tb_mate_against": "mated in {n}",
+    "tb_final": "\nThe tablebase result above is exact and outranks every "
+                "evaluation in this output: {side} to move -- {verdict}.",
+    "tb_blocked": "Seven pieces or fewer, but the tablebase could not be "
+                  "queried: this sandbox's network allowlist refuses "
+                  "{host}. The engine numbers below are a search, not the "
+                  "answer. For the user: exact endgame verdicts need {host} "
+                  "added under Domain allowlist -> Additional allowed domains "
+                  "(on Team and Enterprise plans an admin sets this), then a "
+                  "new chat. Until then the Lichess link above shows the "
+                  "tablebase, and the same data as JSON: {url}",
+    "tb_failed": "Seven pieces or fewer, but the tablebase did not answer "
+                 "({why}). The engine numbers below are a search, not the "
+                 "answer. For the user: the Lichess link above shows the "
+                 "tablebase, and the same data as JSON: {url}",
+    "st_tablebase": "tablebase query: {outcome}",
     "st_fifty": "50-move probe at halfmove clock {hm}: {outcome}",
     "fifty_held": "advantage holds ({score})",
     "fifty_collapsed": "collapses to {score}",
@@ -790,6 +839,110 @@ def material(board, color):
 
 
 # --- engine session ----------------------------------------------------------
+
+TB_FLIP = {"win": "loss", "loss": "win", "draw": "draw",
+           "cursed-win": "blessed-loss", "blessed-loss": "cursed-win",
+           "maybe-win": "maybe-loss", "maybe-loss": "maybe-win",
+           "unknown": "unknown"}
+
+
+def tablebase_query(fen, timeout=TABLEBASE_TIMEOUT, opener=None):
+    """Ask the Lichess tablebase about `fen`: ("ok", data), ("blocked", why)
+    or ("failed", why).
+
+    The split between the last two is the point of this function. Until 2.31.0
+    the host was simply assumed unreachable, because the sandbox allowlist
+    refused it; a user can now add it, and one who has not should be told how,
+    while one whose network hiccuped should not be sent to their settings. A
+    refusal by the sandbox proxy arrives as a failed CONNECT ("Tunnel
+    connection failed: 403") or, through a plain HTTP proxy, as a 403/407 whose
+    body names the policy; anything else -- a timeout, a 429 from Lichess, a
+    reset -- is a failure of the day, not of the configuration.
+
+    `opener` replaces urllib.request.urlopen in tests, so the classification is
+    checked without a network.
+    """
+    url = TABLEBASE_URL + fen.replace(" ", "_")
+    opener = opener or urllib.request.urlopen
+    try:
+        with opener(url, timeout=timeout) as resp:
+            return "ok", json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", "replace").lower()
+        except Exception:
+            pass
+        if exc.code == 407 or (exc.code == 403 and any(
+                w in body for w in ("host_not_allowed", "allowlist",
+                                    "not allowed", "egress", "policy"))):
+            return "blocked", f"HTTP {exc.code}"
+        return "failed", f"HTTP {exc.code}"
+    except urllib.error.URLError as exc:
+        why = str(exc.reason)
+        if re.search(r"tunnel connection failed:\s*40[37]", why, re.I) \
+                or "host_not_allowed" in why:
+            return "blocked", why
+        return "failed", why
+    except (TimeoutError, OSError) as exc:
+        return "failed", str(exc) or type(exc).__name__
+    except ValueError as exc:                     # not JSON
+        return "failed", f"unreadable answer ({exc})"
+
+
+def _tb_mate(dtm, winning):
+    """Moves to mate from plies, for the side the category is stated for."""
+    if not dtm:
+        return None
+    n = (abs(dtm) + 1) // 2
+    return t("tb_mate_for" if winning else "tb_mate_against", n=n)
+
+
+def tablebase_report(board, data, limit=6):
+    """Lines for a tablebase answer, and the one-line verdict for the end.
+
+    Categories and distances in the API are stated for the side to move in the
+    position they describe, so each move's entry -- the position after it -- is
+    flipped to the mover. DTM counts plies and ignores the fifty-move rule, so
+    it is shown next to DTZ and never in place of it.
+    """
+    cat = data.get("category") or "unknown"
+    key = "tb_w_" + cat if "tb_w_" + cat in TEXT else "tb_w_unknown"
+    verdict = t(key)
+    side = t("white") if board.turn == chess.WHITE else t("black")
+    lines = [t("tb_header", side=side, verdict=verdict)]
+    dtz, dtm = data.get("dtz"), data.get("dtm")
+    if dtz is not None or dtm:
+        mate = _tb_mate(dtm, dtm is not None and dtm > 0)
+        rule = (t("tb_rule_cursed", hm=board.halfmove_clock)
+                if cat in ("cursed-win", "blessed-loss")
+                else t("tb_rule_maybe") if cat.startswith("maybe")
+                else t("tb_rule_fine"))
+        lines.append(t("tb_numbers", dtz="n/a" if dtz is None else dtz,
+                       dtm=t("tb_dtm", plies=abs(dtm), mate=mate)
+                       if mate else "", rule=rule).rstrip())
+    shown = []
+    moves = data.get("moves") or []
+    for m in moves[:limit]:
+        mine = TB_FLIP.get(m.get("category") or "unknown", "unknown")
+        word = t("tb_m_" + mine if "tb_m_" + mine in TEXT else "tb_m_unknown")
+        if m.get("checkmate"):
+            word = t("mate_given")
+        else:
+            d = m.get("dtm")
+            if d:
+                # After the move the opponent is to move: a loss for them at
+                # -58 plies is a mate in 30 counted from the move itself.
+                n = (-d) // 2 + 1 if d < 0 else (d + 1) // 2
+                word += ", " + t("tb_mate_for" if d < 0
+                                 else "tb_mate_against", n=n)
+        shown.append(f"{m.get('san', m.get('uci', '?'))} ({word})")
+    if shown:
+        more = len(moves) - len(shown)
+        lines.append(t("tb_moves", moves="; ".join(shown)
+                       + (f"; +{more} more" if more > 0 else "")))
+    return lines, t("tb_final", side=side, verdict=verdict)
+
 
 class Timeline:
     """Per-stage timing.
@@ -1479,12 +1632,30 @@ def run(args):
           + ("?color=black" if flip else ""))
     # At seven men or fewer the position is solved and the engine is not the
     # tool: no Syzygy files are installed here, so K+B+N against a bare king --
-    # a forced mate in at most 33 -- comes back as about +2.6 at any depth. The
-    # container cannot reach the tablebase itself (the egress proxy refuses the
-    # host), so the URL is for the user to open.
+    # a forced mate in at most 33 -- comes back as about +2.6 at any depth.
+    # Since 2.31.0 the Lichess tablebase is asked directly. Whether the sandbox
+    # may reach it is the user's setting, not ours, so a refusal is reported
+    # with the setting that lifts it and the run goes on as it did before.
+    tb_final = None
     if chess.popcount(board.occupied) <= 7:
-        print(t("tb_link", url="https://tablebase.lichess.ovh/standard?fen="
-                + board.fen().replace(" ", "_")))
+        tb_url = TABLEBASE_URL + board.fen().replace(" ", "_")
+        if args.tablebase == "off":
+            print(t("tb_link", url=tb_url))
+        else:
+            kind, data = tablebase_query(board.fen())
+            if kind == "ok":
+                lines, tb_final = tablebase_report(board, data)
+                for line in lines:
+                    print(line)
+                print(t("tb_url", url=tb_url))
+                outcome = data.get("category") or "unknown"
+            elif kind == "blocked":
+                print(t("tb_blocked", host=TABLEBASE_HOST, url=tb_url))
+                outcome = "refused by the allowlist"
+            else:
+                print(t("tb_failed", why=data, url=tb_url))
+                outcome = f"failed ({data})"
+            tl.stage(t("st_tablebase", outcome=outcome))
     side_name = t("black") if flip else t("white")
     # A rendered diagram is the default reading check since 2.8.0, and a PNG
     # when the machine can make one since 2.9.0; the letter grid runs when it
@@ -1809,6 +1980,9 @@ def run(args):
                 print(t("playout_evals", first=fmt(res["first"]),
                         last=fmt(res["last"])))
 
+        if tb_final:
+            print(tb_final)
+
         tl.stage(t("st_print"))
         tl.finish(args.budget, show=args.timing)
         if not args.timing:
@@ -1905,6 +2079,12 @@ def parse_args(argv):
                         "the mate ladder off as well. Roughly a second quicker "
                         "per position, and it misses most composed mates -- do "
                         "not use it where a mate could be on the board")
+    p.add_argument("--tablebase", choices=("auto", "off"), default="auto",
+                   help="at seven pieces or fewer, ask the Lichess tablebase "
+                        "(%s) for the exact result (auto, the default), or "
+                        "only print its URL (off). Needs that host on the "
+                        "sandbox allowlist; without it the run says so and "
+                        "goes on" % TABLEBASE_HOST)
     p.add_argument("--fifty-probe", choices=("auto", "on", "off"),
                    default="auto",
                    help="re-evaluate the same placement with the halfmove clock "

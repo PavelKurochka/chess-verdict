@@ -20,6 +20,8 @@ python3 tests/test_verdict.py                      # the verdict rule, instant
 python3 tests/test_ladder.py                       # what the ladder may claim, instant
 python3 tests/test_reader.py                       # the recognizer, offline, about 5 s
 python3 tests/test_reader.py --sweep               # the 900-render held-out figure, about 1 min
+python3 tests/test_tablebase.py                    # the tablebase probe, offline, instant
+python3 tests/test_tablebase.py --live             # plus one real query; SKIP if the host is not allowed
 ```
 
 `selftest.py` refuses to run when `SKILL.md`, `scripts/solve.py` and `CHANGELOG.md` disagree about the version — a green suite against a build nobody can name is worth very little. It runs `solve.py` with `--scan off` on most rows and `--scan full` on the three that cover the verdict branches, and it must never be given `--quick`: that drops the search to MultiPV 1 and bypasses exactly the multi-line stopping bugs the suite exists to catch.
@@ -85,6 +87,15 @@ machine's speed on the day rather than about the code — the test would go gree
 or red with the load average. The scripted engine also records which rungs it
 was asked, which is the only way to tell "asked and answered no" from "never
 asked" from outside.
+
+`tests/test_tablebase.py` covers the tablebase probe added in 2.31.0 without a
+network: stand-ins for `urlopen` raise the errors a refused host and a bad day
+produce, and the split between them is checked, because it decides whether the
+user is sent to their settings. The report side runs on answers recorded from
+the service, including a cursed win and a lost position, where the distances
+must be flipped to the mover. `--live` adds one real query and prints SKIP,
+not FAIL, when the sandbox allowlist refuses the host: the setting belongs to
+the user, and the skill works without it.
 
 `tests/test_reader.py` is the first offline cover the recognizer has had.
 It renders positions through `chess.svg` and `rsvg-convert`, reads them back
