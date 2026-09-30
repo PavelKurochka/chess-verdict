@@ -54,6 +54,15 @@ something went wrong with how it was asked, not with the position.
 Photographs of a real board, taken at an angle, are the one input that often
 fails. A flat screenshot or a scan of a printed diagram works far better.
 
+**One optional setting, for endgames.** With seven pieces or fewer on the
+board the exact answer lives in an online database at Lichess. The skill can
+look it up only if you let it: in the app's settings, find **Domain allowlist**,
+type `tablebase.lichess.ovh` under **Additional allowed domains** and press
+**Add**, then start a new chat. That one address is all it needs. If your
+account belongs to a company plan, an administrator has to do this. Without it
+everything still works; in endgames you get the engine's estimate and a link
+to open yourself, and the answer will mention the setting.
+
 ---
 
 ## Reading the answer
@@ -156,9 +165,10 @@ ask it to play the position out against itself — it will show you the moves
 going nowhere.
 
 **Endgames with very few pieces.** Those have been solved exactly by databases
-called tablebases, which this skill does not carry. King, bishop and knight
-against a lone king is a forced mate, but the engine reports it as a modest
-advantage. In endings like that, trust the name of the ending over the number.
+called tablebases. King, bishop and knight against a lone king is a forced
+mate, but the engine reports it as a modest advantage. With the setting above
+the skill looks the position up and gives the exact result; without it, trust
+the name of the ending over the number, and open the link it gives you.
 
 **Quiet positions.** The engine stops early once its answer stops changing,
 which suits tactics. Slow, closed positions keep drifting the deeper you look,

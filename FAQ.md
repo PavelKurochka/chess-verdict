@@ -464,9 +464,21 @@ the depth the number came from.
 Endgames get a second one since 2.10.0, and it is not about depth. At seven men
 or fewer the position is solved and the engine is not the tool — nothing here
 installs tablebases, so K+B+N against a bare king is a forced mate in at most 33
-and reads about `+2.6` at any depth. The run prints a `tablebase.lichess.ovh`
-query URL for the user to open, and says the ending should be named rather than
-quoted as a number.
+and reads about `+2.6` at any depth. Until 2.31.0 the run printed a
+`tablebase.lichess.ovh` query URL for the user to open, because the sandbox
+could not reach the host. Since 2.31.0 it asks the tablebase itself and reports
+the exact result — win, draw, loss, cursed win, distance to mate — when the user
+has added `tablebase.lichess.ovh` to the sandbox's allowed domains; without that
+it says which setting is missing and falls back to the URL.
+
+### Why is there no exact answer in my endgame?
+
+Because the sandbox is not allowed to reach the tablebase. In the Claude app's
+settings, under **Domain allowlist → Additional allowed domains**, add
+`tablebase.lichess.ovh` and start a new chat. Nothing else needs adding. On Team
+and Enterprise plans the organisation admin controls that list. The run itself
+says when this is the cause; if it says the tablebase *did not answer* instead,
+Lichess was slow or busy and trying again later is the fix.
 
 ---
 

@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.30.0"
+  version: "2.31.0"
 description: >-
   Deliver a verdict on a chess position with Stockfish: read the position from a
   diagram image or a FEN string, confirm the reading is legal and the right way
@@ -27,7 +27,7 @@ description: >-
 
 A picture or a FEN goes in; what comes back has been checked twice — once for whether the board was read correctly, once by the engine. The verdict states its own strength: a forced mate is called a forced mate, an advantage that merely survives the defender's best try is called that and no more.
 
-After the one-time setup nothing here needs the network. Engine, recognizer and search all run locally.
+After the one-time setup nothing here needs the network, with one optional exception. Engine, recognizer and search all run locally; at seven pieces or fewer `solve.py` also asks the Lichess tablebase for the exact result, which works only if the user has put `tablebase.lichess.ovh` on the sandbox allowlist (see [Exact endgames](#exact-endgames-the-one-network-setting)). Without it everything else works as before.
 
 **Why the steps are in this order.** In almost every position the engine is not the weak link; reading the position is. A single misplaced piece produces a syntactically perfect FEN, a confident evaluation, and a completely wrong answer. So the position gets read twice, by two different procedures, and the two readings are compared. The exceptions are narrow and recognisable before the answer is written — see [Where the engine is the weak link](#where-the-engine-is-the-weak-link).
 
@@ -41,7 +41,7 @@ Three kinds of position make Stockfish state a number confidently and wrongly, a
 
 **Fortresses.** Material says one thing and the position is a draw. A blocked structure is not by itself the trigger — an extra queen behind sixteen locked pawns still mates in 11. What matters is whether progress requires a capture or a pawn move that cannot be forced, which is what the probe below measures.
 
-**Theoretically decided endgames, because there are no tablebases.** Nothing here installs Syzygy files and `solve.py` never probes any. K+B+N against a bare king is a forced mate in at most 33 and reports about `+2.6` at any depth reached in a minute. Below eight pieces, name the ending and hand over the tablebase link (step 4).
+**Theoretically decided endgames.** Nothing here installs Syzygy files. K+B+N against a bare king is a forced mate in at most 33 and reports about `+2.6` at any depth reached in a minute. Below eight pieces `solve.py` asks the Lichess tablebase instead, when the sandbox may reach it; when it may not, name the ending and hand over the tablebase link (step 4).
 
 **The halfmove clock, which is part of the position.** The same K+B+N placement with `90` in the fifth field evaluates `0.00` instead of `+2.57`, because the engine applies the fifty-move rule inside its search. Screenshots carry no clock, published FENs pad it to `0`, and `img2fen.py` writes `0` there unconditionally. The castling rights beside it *are* read from the home squares; the clock is still a constant, not a reading.
 
@@ -89,6 +89,18 @@ python3 scripts/stage.py "install recognizer" -- pip install onnxruntime pillow 
 ```
 
 About 54 MB and a few seconds; the model itself ships with the skill at 1.3 MB. This is cheap now, but it is still a *second* reading rather than a replacement for the first: reading the position straight off the image is the normal path.
+
+### Exact endgames: the one network setting
+
+At seven pieces or fewer the exact answer is a tablebase lookup, and `solve.py` makes it against `tablebase.lichess.ovh`. Whether the sandbox may reach that host is the **user's** setting, not something the assistant can change: *Domain allowlist → Additional allowed domains*, where the user adds exactly `tablebase.lichess.ovh` (on Team and Enterprise plans an organisation admin controls this). The change may take effect only in a new chat. Nothing else this skill does needs a domain added — not `lichess.org`, not a wildcard — so do not suggest more than that one host.
+
+`solve.py` reports one of three things on its own, right after the board link:
+
+- `Tablebase (Lichess Syzygy, exact): …` — the answer. See step 4 for how to report it.
+- `… this sandbox's network allowlist refuses tablebase.lichess.ovh …` — the setting is missing. Tell the user once, in one sentence, which host to add and where, then carry on with the engine as below. Do not repeat it on every position in the same conversation.
+- `… the tablebase did not answer (…)` — a timeout, a rate limit, an outage. Not a setting: do not send the user to their settings; hand over the link.
+
+`--tablebase off` skips the query and prints only the link, for runs that must not touch the network.
 
 If the network blocks the recognizer's install, say so and read the position straight off the image; the engine part works regardless.
 
@@ -271,7 +283,9 @@ When the run printed a re-probe note — *a mate in 6 was found first … that p
 
 Report evaluations as they are: `+7.2` for Black means Black is winning by roughly seven pawns, `mate in 19` means a forced mate exists but is long. Do not round a forced mate down to "winning" or inflate a small advantage.
 
-**Below eight pieces, name the ending; do not let the number stand alone.** With no tablebases the engine's score in a theoretically decided ending is a search artefact. Say which ending it is and what theory says, use the engine for the move order, and hand the user the exact answer: the Lichess link `solve.py` prints shows the tablebase in the analysis board's explorer panel, and `https://tablebase.lichess.ovh/standard?fen=<FEN, spaces as underscores>` is the same data as JSON — result, distance to zeroing, distance to mate and every legal move ranked. This container cannot call either (`403 host_not_allowed`), so they are for the user to open.
+**Below eight pieces, the tablebase is the verdict when it answered.** The `Tablebase (Lichess Syzygy, exact)` block is a proof, and it outranks every engine number in the same output — the run repeats it as its last line so that it cannot be lost under them. Report its result (won, drawn, lost), the best moves it lists, and the distance to mate as `mate in N`. Two categories need care: a *cursed win* is won on the board but drawn by the fifty-move rule, and a *blessed loss* the reverse — say which, and that the halfmove clock decides it, since the clock from a diagram is an assumption. DTM counts as if the fifty-move rule did not exist; DTZ is the number the rule is measured against. The engine line is still useful for explaining the plan, never for the result.
+
+**When the tablebase did not answer, name the ending; do not let the number stand alone.** Without it the engine's score in a theoretically decided ending is a search artefact. Say which ending it is and what theory says, use the engine for the move order, and hand the user the exact answer: the Lichess link `solve.py` prints shows the tablebase in the analysis board's explorer panel, and `https://tablebase.lichess.ovh/standard?fen=<FEN, spaces as underscores>` is the same data as JSON — result, distance to zeroing, distance to mate and every legal move ranked. If the run said the allowlist refuses the host, add one sentence on the setting ([Exact endgames](#exact-endgames-the-one-network-setting)).
 
 **When most of the reply list is mated and the headline is not, believe the reply list.** The script says this itself in place of the verdict line that would contradict it, on both the sampled and the full-enumeration paths. A defence that is mated proves the position mates at least down that branch; a headline in centipawns only means the search did not resolve the others, and the verdict line derived from it inherits the same error. Say the position is mating and that the distance is not established — and do not try to fix it with settings, which does not work. ([The position this was written on](references/rationale.md#the-verdict).)
 
@@ -305,7 +319,7 @@ The remainder row is split into gaps, each named after the command that followed
 
 The same pipeline serves other questions. For "who stands better and why", run `--quick` and report the evaluation with the main plans for both sides. For "was this move a mistake", analyse the position before and after and compare evaluations — two `--quick` runs are enough, and they keep the mate ladder, so the comparison is not mate-blind; do not reach for `--fast` here. For opening positions, note that the engine's preference is not the same as theory and say so.
 
-Quiet and endgame positions are where evaluations drift with depth. If the assessment matters, raise `--time` and `--min-depth` together and say which depth the number came from. In an endgame, check the piece count first: at seven or fewer, depth is the wrong tool and the tablebase link in step 4 is the right one.
+Quiet and endgame positions are where evaluations drift with depth. If the assessment matters, raise `--time` and `--min-depth` together and say which depth the number came from. In an endgame, check the piece count first: at seven or fewer, depth is the wrong tool and the tablebase in step 4 is the right one.
 
 ## Reference
 
