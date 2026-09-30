@@ -39,6 +39,12 @@ ceiling on the request; four positions came back in 0.45–0.7 s from a cloud sa
 stand-ins for `urlopen`, and the report on answers recorded from the service;
 `--live` adds one real query and prints SKIP when the host is not allowed.
 
+`SKILL.md` stays under 40 KB: 40 551 bytes. The first draft was 42 442 and
+failed the size check in CI; the new text was cut to the rules, the meaning of
+DTM, DTZ, cursed and blessed results and the JSON address moved to
+`references/rationale.md`, and the timing and reference sections were
+tightened without dropping a rule.
+
 ### Also in this release
 
 **Three endgames with tablebase truth in `tests/hard.epd`.** Until now every

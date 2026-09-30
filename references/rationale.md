@@ -49,6 +49,14 @@ CONNECT, `Tunnel connection failed: 403`; through a plain HTTP proxy a 403 or
 407 whose body names the policy. Both are matched; `tests/test_tablebase.py`
 pins the split.
 
+Moved from `SKILL.md` to keep it under 40 KB: a *cursed win* is won on the
+board but drawn by the fifty-move rule, a *blessed loss* the reverse, and the
+halfmove clock decides which — an assumption when the position came from a
+diagram. DTM counts as if the fifty-move rule did not exist; DTZ is the number
+the rule is measured against. When the query fails, the same data is at
+`https://tablebase.lichess.ovh/standard?fen=<FEN, spaces as underscores>` as
+JSON — result, DTZ, DTM and every legal move ranked — for the user to open.
+
 **The halfmove clock.** The same placement with `90` in the fifth field
 evaluates `0.00` instead of `+2.57`, because the engine applies the fifty-move
 rule inside its search and ten plies is not enough to mate.
