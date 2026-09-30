@@ -21,8 +21,9 @@ test and script, but was committed without the executable bit, so the release
 workflow's archive check stopped the 2.31.0 build ("lost the executable bit")
 and no 2.31.0 release was published; the tag `v2.31.0` stays, without a
 release. This is the same code as 2.31.0 with that one mode fixed, so the
-2.31.0 entry below describes this release. Also in the repository only:
-`.mailmap`, so that `git log` shows one name for all commits.
+2.31.0 entry below describes this release. Also new: `.mailmap`, so that
+`git log` shows one name for all commits; it ships in the archive, like
+`.gitignore`, and does nothing there.
 
 ## 2.31.0 — 2026-09-30
 
