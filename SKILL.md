@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.31.1"
+  version: "2.31.2"
 description: >-
   Deliver a verdict on a chess position with Stockfish: read the position from a
   diagram image or a FEN string, confirm the reading is legal and the right way
@@ -57,20 +57,21 @@ Three kinds of position make Stockfish state a number confidently and wrongly, a
 
 ## Reading the files of this skill
 
-Open `SKILL.md` once with `view`. That single line in the transcript is the activation signal and is worth keeping. Read everything else in the directory `SKILL.md` was opened from — references, tests, the scripts themselves — with `bash` (`sed -n`, `cat`, `grep`) instead. Every `view` on a path under `/mnt/skills` emits another identical *Loaded skill chess-verdict* line, and a column of those says nothing about which build is running. The line that says that is the banner `solve.py` and `img2fen.py` print first, which is why they print it. ([What was measured](references/rationale.md#reading-the-files-of-this-skill).)
+Open `SKILL.md` once with `view`: that one line is the activation signal. Read everything else in its directory — references, tests, scripts — with `bash` (`sed -n`, `cat`, `grep`). Every `view` under `/mnt/skills` emits another identical *Loaded skill chess-verdict* line, which says nothing about which build is running; the banner `solve.py` and `img2fen.py` print first does. ([What was measured](references/rationale.md#reading-the-files-of-this-skill).)
 
 ## Setup
 
 ```bash
 python3 scripts/stage.py --start
+python3 scripts/stage.py "update package lists" -- apt-get update -q
 python3 scripts/stage.py "install engine" -- apt-get install -y stockfish
 python3 scripts/stage.py "install python-chess" -- pip install chess --break-system-packages --use-pep517 -q
 python3 scripts/stage.py "install rasteriser" -- apt-get install -y librsvg2-bin
 ```
 
-About fifteen seconds together. The installs are kept apart deliberately: in one command the download and the unpacking merge into a single unreadable number.
+About twenty seconds; kept apart so download and unpacking do not merge into one number. The update is needed when the container starts with empty package lists (`Unable to locate package`); a `403` from an unrelated repository is harmless. **Do not hide the output of these lines**; if the engine did not install, say so.
 
-**The third line is worth its three seconds:** it turns the diagram into a PNG, which the assistant can open and an SVG it cannot. `pip install cairosvg` does the same; ImageMagick does not. Without either, `solve.py` writes an SVG and everything else works.
+**The rasteriser is worth its three seconds:** it turns the diagram into a PNG, which the assistant can open and an SVG it cannot. `pip install cairosvg` does the same; ImageMagick does not. Without either, `solve.py` writes an SVG and everything else works.
 
 The first line starts the timing journal. From then on every command goes through the wrapper: `python3 scripts/stage.py "<label>" -- <command>`. It is closed by `python3 scripts/stage.py --stop` after the last command of the analysis — see [Timing](#timing). **The timing table is not printed unless the user asks for it.**
 

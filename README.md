@@ -51,12 +51,14 @@ for Claude Code, or upload the archive in the Claude app under
 The skill installs its own dependencies on first use:
 
 ```bash
+apt-get update
 apt-get install -y stockfish
 pip install chess --break-system-packages --use-pep517
 apt-get install -y librsvg2-bin
 ```
 
-About fifteen seconds together. The engine path can be overridden with
+About twenty seconds together; the update is there because the container may
+start with empty package lists. The engine path can be overridden with
 `$STOCKFISH`; it defaults to `/usr/games/stockfish`.
 
 The third line is optional and recommended: it rasterises the diagram to PNG,

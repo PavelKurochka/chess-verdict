@@ -87,7 +87,7 @@ TABLEBASE_TIMEOUT = 6.0
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.31.1"
+VERSION = "2.31.2"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -366,8 +366,9 @@ TEXT = {
                        "assumption, not a reading: where castling is the "
                        "solution it is the whole answer.",
     "no_engine": "STOCKFISH NOT FOUND at {path} ({why}). Install it with "
-                 "`apt-get install -y stockfish`, or point the STOCKFISH "
-                 "environment variable at the binary. Nothing was analysed; "
+                 "`apt-get update && apt-get install -y stockfish`, or point "
+                 "the STOCKFISH environment variable at the binary. Nothing "
+                 "was analysed; "
                  "the reading above, if any, still stands.",
     "engine_stopped": "STOCKFISH STOPPED ON THIS POSITION and returned no "
                       "analysis{why}. Newer Stockfish versions refuse some "

@@ -14,6 +14,28 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.31.2 — 2026-10-01
+
+**Setup runs `apt-get update` first.** Checked in a live claude.ai chat on
+2026-10-01: the container now starts with an empty `/var/lib/apt/lists`, so
+`apt-get install -y stockfish` failed with `Unable to locate package
+stockfish` (exit 100) and `solve.py` stopped at `STOCKFISH NOT FOUND`. The
+skill never had an update line; the lists used to be there. With
+`apt-get update` (about 9 s, exit 0) the install takes 4 s and brings
+Stockfish 16 on Ubuntu 24.04. The update also prints a `403` for
+`download.docker.com`, a repository the sandbox proxy refuses; it is
+harmless, and `SKILL.md` says so. Setup is now about twenty seconds, not
+fifteen.
+
+The failure was invisible because the session appended `>/dev/null 2>&1` to
+the install lines and carried on. `SKILL.md` now says not to hide that
+output and to say so when the engine did not install. The answer in that
+chat was still right — K+B+N against K, which the tablebase settled, mate in
+30 — but any position above seven pieces would have got no analysis at all.
+`solve.py`'s missing-engine message and the README name the update too. To
+make room, the "Reading the files" and setup paragraphs of `SKILL.md` are
+shorter; it is 40 616 bytes.
+
 ## 2.31.1 — 2026-09-30
 
 **`tests/test_tablebase.py` is executable.** It has a shebang like every other
