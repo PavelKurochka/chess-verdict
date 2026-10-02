@@ -16,8 +16,11 @@ it is measured.
 
 ## Recording is always on, printing is on request
 
-`scripts/stage.py --start` runs as the first command of every analysis. It is
-silent and costs a fraction of a second.
+`scripts/setup.py` runs as the first command of every analysis and starts the
+journal itself, recording each install step as a row (`already installed` when
+it was skipped). Outside the skill's normal flow, `scripts/stage.py --start`
+does the same without installing anything; it is silent and costs a fraction
+of a second.
 
 `scripts/stage.py --stop` ends the measured window. It runs as the last command
 of every analysis, immediately before the answer is written.

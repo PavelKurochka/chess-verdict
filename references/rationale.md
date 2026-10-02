@@ -400,7 +400,7 @@ loaded in full on every activation; these are read when a rule is changed.
 
 ### Setup
 
-**The third line is worth its three seconds.** `librsvg2-bin` turns the diagram `solve.py` writes from an SVG into a PNG, and the point is not that it looks better: an assistant can open a PNG and cannot open an SVG, so the PNG is what lets the position be checked against the source by machine as well as by the user. `pip install cairosvg` does the same job. Without either, `solve.py` writes an SVG and everything else works unchanged. ImageMagick does not count — it delegates SVG to `rsvg-convert` and fails outright without it.
+**The rasteriser is worth its three seconds.** `librsvg2-bin` turns the diagram `solve.py` writes from an SVG into a PNG, and the point is not that it looks better: an assistant can open a PNG and cannot open an SVG, so the PNG is what lets the position be checked against the source by machine as well as by the user. `pip install cairosvg` does the same job. Without either, `solve.py` writes an SVG and everything else works unchanged. ImageMagick does not count — it delegates SVG to `rsvg-convert` and fails outright without it.
 
 ### What the search does, and why
 

@@ -60,7 +60,8 @@ except ImportError as exc:
     # setup line can fail for reasons that have nothing to do with the network
     # -- on images whose Debian setuptools rejects legacy builds it dies with
     # `AttributeError: install_layout` -- so the message names the fix.
-    sys.exit("python-chess is not installed ({exc}). Install it with:\n"
+    sys.exit("python-chess is not installed ({exc}). Run scripts/setup.py, "
+             "or install it with:\n"
              "  pip install chess --break-system-packages --use-pep517 -q\n"
              "--use-pep517 is not optional decoration: python-chess 1.11 ships "
              "as source only, and without it some images fail to build it. "
@@ -87,7 +88,7 @@ TABLEBASE_TIMEOUT = 6.0
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.32.0"
+VERSION = "2.33.0"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -298,6 +299,14 @@ TEXT = {
     "board_svg": "\nPosition as read, rendered from {side}'s side -- open this "
                  "diagram, compare it against the original, and show it to the "
                  "user before trusting the answer:\n  {path}",
+    "board_send": "\nLast step before answering: send the diagram to the user "
+                  "as a file. Writing it to disk does not show it to them.\n"
+                  "  {path}",
+    "board_send_svg": "\nLast step before answering: send the diagram to the "
+                      "user as a file. Writing it to disk does not show it to "
+                      "them. It is an SVG, which you cannot open: "
+                      "scripts/setup.py installs the rasteriser for a PNG.\n"
+                      "  {path}",
     "board_svg_failed": "WARNING: could not write the diagram to {path} ({err}) "
                         "-- falling back to the letter grid below; the analysis "
                         "is unaffected",
@@ -365,8 +374,8 @@ TEXT = {
                        "castling field was filled in as '-'. That is an "
                        "assumption, not a reading: where castling is the "
                        "solution it is the whole answer.",
-    "no_engine": "STOCKFISH NOT FOUND at {path} ({why}). Install it with "
-                 "`apt-get update && apt-get install -y stockfish`, or point "
+    "no_engine": "STOCKFISH NOT FOUND at {path} ({why}). Run "
+                 "scripts/setup.py, which says why it failed, or point "
                  "the STOCKFISH environment variable at the binary. Nothing "
                  "was analysed; "
                  "the reading above, if any, still stands.",
@@ -1664,6 +1673,7 @@ def run(args):
     # cannot be written is a lost convenience, not a lost answer: fall back and
     # carry on rather than abort a search the user is waiting for.
     show_text = args.text_board or args.diagram == "none"
+    written = None              # (path, format) once a diagram is on disk
     if args.diagram != "none":
         tool = find_rasteriser()
         # Not `fmt`: that name is a scoring helper defined below in this same
@@ -1685,6 +1695,7 @@ def run(args):
             print(t("board_svg_failed", path=path, err=exc))
             show_text = True
         else:
+            written = (path, diagram_fmt)
             tl.stage(t("st_render", fmt=diagram_fmt,
                        tool=tool if diagram_fmt == "png" else t("render_builtin")))
     if show_text:
@@ -1990,6 +2001,14 @@ def run(args):
             print(t("t_short", dt=time.time() - ses.started, budget=args.budget))
         if ses.left() < 1:
             print(t("budget_warn"))
+        # Last, because the end of the output is what gets read before the
+        # answer is written. The request near the top was ignored by Haiku in
+        # a live run, and a file in /mnt/user-data/outputs is not shown to the
+        # user unless the assistant sends it -- checked on claude.ai,
+        # 2026-10-02. A script cannot send it; it can only be the last word.
+        if written:
+            print(t("board_send" if written[1] == "png" else "board_send_svg",
+                    path=written[0]))
     except chess.engine.EngineTerminatedError:
         # Until 2.29.3 this was a traceback, preceded by the mate ladder saying
         # the budget ran out -- one second into thirty -- and advising a bigger

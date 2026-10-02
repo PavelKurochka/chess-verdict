@@ -14,6 +14,54 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.33.0 — 2026-10-02
+
+**Setup is one script: `scripts/setup.py`.** On 2026-10-02 the same mate in 4
+went to Opus 5.5, Sonnet 5.5 and Haiku 4.5 in fresh claude.ai chats, one run
+each. All three found the mate, which is the script's part. None ran the five
+setup lines as written: Opus and Sonnet piped each through `tail -2` or `-3`,
+which hides a failure in the middle and swaps the exit code for tail's; Haiku
+dropped the rasteriser line, so the diagram came out as an SVG it could not
+open and the user never saw. A line that is not there cannot be skipped, and
+output that is already short gives nothing to trim, so `SKILL.md` now has one
+command. `setup.py` starts the timing journal, runs `apt-get update` only when
+an apt package is missing, installs Stockfish, python-chess (`--use-pep517`,
+through the same interpreter that runs `solve.py`) and `librsvg2-bin`, skips
+whatever is present, and prints one line per step. A failed step shows the
+last twelve lines of its own output; a `403` during the update is named as the
+sandbox proxy and called harmless. It ends `Ready` or `NOT READY` and exits 1
+only when the engine or python-chess is missing. `--image` adds Pillow and
+NumPy, `--recognizer` onnxruntime as well. A second position in the same chat
+now costs well under a second of setup instead of twenty.
+
+**`solve.py` ends by asking for the diagram to be sent.** The plan was to write
+it to `/mnt/user-data/outputs` so that it reached the user whatever the model
+did. Checked on claude.ai the same day: a file written there is not shown — no
+card, no Outputs panel — until the assistant sends it with its file tool, and a
+script cannot call that tool. `solve.py` already wrote there by default. So the
+last line of every run that wrote a diagram is now the request to send it, with
+the path; the request near the top of the output was the one Haiku ignored.
+For an SVG the line adds that `setup.py` installs the rasteriser.
+
+The missing-engine and missing-python-chess messages point to `setup.py`.
+`SKILL.md` is 39 500 bytes, 968 fewer than in 2.32.0, because five lines and
+three paragraphs of setup became one command and one paragraph. New
+`tests/test_setup.py`: everything already present (skip, `Ready`, journal rows),
+a stub `apt-get` for the failure path (POSIX only), the 403 note, and the
+hand-off line.
+
+Both READMEs now say **Customize → Skills**; claude.ai moved skills out of
+Settings → Capabilities.
+
+**Checked live on Haiku 4.5 (Extended), same position, one run.** It ran
+`setup.py` exactly as written (update 9.5 s, engine 5.4 s, python-chess 7.0 s,
+rasteriser 3.2 s, `Ready`), ran `solve.py` once, closed the journal and sent
+`board.png`, which appeared in the chat and its Outputs panel. The answer gave
+both defences as the engine printed them. Still missing from it: the Lichess
+link and the note that only `Nxc2+` mates.
+
+---
+
 ## 2.32.0 — 2026-10-02
 
 Checked against Anthropic's *Skill authoring best practices* (prompted by a
