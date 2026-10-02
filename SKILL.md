@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.32.0"
+  version: "2.33.0"
 description: >-
   Delivers a verdict on a chess position with Stockfish: reads the position from
   a diagram image or a FEN string, confirms the reading is legal and the right
@@ -39,12 +39,12 @@ After the one-time setup nothing here needs the network except one optional quer
 
 Run down it before sending the answer; 5 and 6 are the ones skipped in practice.
 
-1. `stage.py --start`, then setup, its output not hidden.
+1. `setup.py`, run as written; it starts the journal.
 2. Side to move and orientation settled from labels, caption or the user — never guessed.
 3. Two readings compared; `STATUS_VALID`, or the illegality reported.
 4. `solve.py` once; side lines with `--line`.
 5. `stage.py --stop`.
-6. The diagram — `compare.png` for an image — opened and shown.
+6. The diagram — `compare.png` for an image — opened and sent to the user.
 7. The verdict claims no more than was proved.
 
 ## Where the engine is the weak link
@@ -74,34 +74,14 @@ Open `SKILL.md` once with `view`: that one line is the activation signal. Read e
 ## Setup
 
 ```bash
-python3 scripts/stage.py --start
-python3 scripts/stage.py "update package lists" -- apt-get update -q
-python3 scripts/stage.py "install engine" -- apt-get install -y stockfish
-python3 scripts/stage.py "install python-chess" -- pip install chess --break-system-packages --use-pep517 -q
-python3 scripts/stage.py "install rasteriser" -- apt-get install -y librsvg2-bin
+python3 scripts/setup.py                # add --image for a diagram image, --recognizer to run img2fen.py
 ```
 
-About twenty seconds; kept apart so download and unpacking do not merge into one number. The update is needed when the container starts with empty package lists (`Unable to locate package`); a `403` from an unrelated repository is harmless. **Do not hide the output of these lines**; if the engine did not install, say so.
+Run it exactly as written, from the skill's directory, at the start of every analysis — no pipe, no redirect, no extra lines. It starts the timing journal, installs the engine, python-chess and the rasteriser (`--image` adds Pillow and NumPy for `compare.py`, `--recognizer` onnxruntime as well, about 54 MB), skips whatever is already there, and prints one line per step. About twenty seconds the first time, under one after that. It ends `Ready: …` or `NOT READY: …`; on the second, say the engine did not install and do not analyse by hand.
 
-**The rasteriser is worth its three seconds:** it turns the diagram into a PNG, which the assistant can open and an SVG it cannot. `pip install cairosvg` does the same; ImageMagick does not. Without either, `solve.py` writes an SVG and everything else works.
+From then on every command goes through the wrapper: `python3 scripts/stage.py "<label>" -- <command>`. It is closed by `python3 scripts/stage.py --stop` after the last command of the analysis — see [Timing](#timing). **The timing table is not printed unless the user asks for it.**
 
-The first line starts the timing journal. From then on every command goes through the wrapper: `python3 scripts/stage.py "<label>" -- <command>`. It is closed by `python3 scripts/stage.py --stop` after the last command of the analysis — see [Timing](#timing). **The timing table is not printed unless the user asks for it.**
-
-**Only if a diagram came from an image**, add what `compare.py` in step 4 needs:
-
-```bash
-python3 scripts/stage.py "install imaging" -- pip install pillow numpy --break-system-packages -q
-```
-
-Usually already present, in which case this costs a second and says so. It has nothing to do with recognition — `compare.py` only crops and composes.
-
-**Only if a diagram image has to be recognized**, add the reader's runtime:
-
-```bash
-python3 scripts/stage.py "install recognizer" -- pip install onnxruntime pillow numpy --break-system-packages -q
-```
-
-About 54 MB and a few seconds; the model itself ships with the skill at 1.3 MB. This is cheap now, but it is still a *second* reading rather than a replacement for the first: reading the position straight off the image is the normal path.
+The recognizer is a *second* reading rather than a replacement for the first: reading the position straight off the image is the normal path.
 
 ### Exact endgames: the one network setting
 
@@ -115,7 +95,7 @@ At seven pieces or fewer `solve.py` queries `tablebase.lichess.ovh`. Reaching it
 
 If the network blocks the recognizer's install, say so and read the position straight off the image; the engine part works regardless.
 
-**If python-chess itself will not install, nothing here runs.** Say so plainly, and do not analyse the position by hand as though the engine had. (`--use-pep517` is in the setup line because python-chess 1.11 ships as source only, and some images cannot build it without it.)
+**If python-chess itself will not install, nothing here runs.** Say so plainly, and do not analyse the position by hand as though the engine had. (`setup.py` passes `--use-pep517`: python-chess 1.11 ships as source only.)
 
 **`STOCKFISH STOPPED ON THIS POSITION` is the same case for one position** (newer Stockfish refuses e.g. nine pawns a side): pass on its reason, say no verdict was computed, and do not analyse by hand.
 
@@ -247,7 +227,7 @@ Every one of these has actually cost minutes in practice.
 
 **When the position came from an image, pass the image's side — `--view black` or `--view white` —** so the diagram faces the way the source does. By default it faces the side to move, and a Black-to-move book diagram would come out upside down against its source. `compare.py` takes the same `--view`.
 
-**Open that diagram, then show it in the answer.** Both halves matter. Opening it is the check — the file is a PNG precisely so it can be read here and compared against the source square by square. Showing it is what lets the user catch a misread without being asked; a file rendered and never displayed checks nothing.
+**Open that diagram, then send it to the user as a file** — the run ends by naming it. Both halves matter. Opening it is the check — the file is a PNG precisely so it can be read here and compared against the source square by square. Sending it is what lets the user catch a misread without being asked; a file written to `/mnt/user-data/outputs` and never sent is not shown to them.
 
 **When the position came from an image, do that comparison on one sheet:**
 
@@ -263,7 +243,7 @@ The board is found by colour, with a second path for monochrome diagrams. Where 
 
 **A comparison sheet is not a substitute for reading the position twice.** It catches a piece on the wrong square, which is what it is for. It cannot catch a board read from the wrong side — a 180° reading puts every piece in a plausible place, and both halves will look alike. Step 2 is what catches that.
 
-**When the diagram is an SVG, that first half is not available** — an SVG cannot be opened here. The material counts stand in, together with the letter grid `chess.svg` writes into the file's `<desc>` element, which `head` will show; `--text-board` prints that grid alongside the diagram whenever a reading is in doubt. Better, install a rasteriser and re-run. **In a plain-text surface, pass `--diagram none`** — a path to a file nobody can open is worse than the letter grid, and that flag prints the grid in its place; the same fallback fires by itself when the file cannot be written.
+**When the diagram is an SVG, that first half is not available** — an SVG cannot be opened here. The material counts stand in, together with the letter grid `chess.svg` writes into the file's `<desc>` element, which `head` will show; `--text-board` prints that grid alongside the diagram whenever a reading is in doubt. Better, run `setup.py` and re-run. **In a plain-text surface, pass `--diagram none`** — a path to a file nobody can open is worse than the letter grid, and that flag prints the grid in its place; the same fallback fires by itself when the file cannot be written.
 
 **Do not imitate a board in text**, and do not draw one by hand: box-drawing characters and glyphs like `♞` misalign outside a monospace terminal, and a check that looks broken is not looked at. Show the rendered file.
 

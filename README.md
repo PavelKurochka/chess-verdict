@@ -46,34 +46,30 @@ only wants to show the assistant a position and read the answer, start with
 
 Drop the directory into your skills folder — `~/.claude/skills/chess-verdict`
 for Claude Code, or upload the archive in the Claude app under
-**Settings → Capabilities → Skills**.
+**Customize → Skills**. Any current model works ([Which model](#which-model)).
 
-The skill installs its own dependencies on first use:
+The skill installs its own dependencies on first use, with one command:
 
 ```bash
-apt-get update
-apt-get install -y stockfish
-pip install chess --break-system-packages --use-pep517
-apt-get install -y librsvg2-bin
+python3 scripts/setup.py                # engine, python-chess, rasteriser
+python3 scripts/setup.py --image        # + Pillow and NumPy for compare.py
+python3 scripts/setup.py --recognizer   # + onnxruntime for img2fen.py
 ```
 
-About twenty seconds together; the update is there because the container may
-start with empty package lists. The engine path can be overridden with
+It runs `apt-get update`, `apt-get install stockfish librsvg2-bin` and
+`pip install chess --use-pep517` as needed, skips anything already installed,
+prints one line per step, and ends `Ready` or `NOT READY` (exit status 1 when the
+engine or python-chess is missing). About twenty seconds the first time. It
+also starts the timing journal. The engine path can be overridden with
 `$STOCKFISH`; it defaults to `/usr/games/stockfish`.
 
-The third line is optional and recommended: it rasterises the diagram to PNG,
-which is the form an assistant reading the output can actually open and check.
-`pip install cairosvg` serves the same purpose and is used if that is what the
-machine has. Without either, the diagram is written as an SVG and nothing else
-changes.
+The rasteriser (`librsvg2-bin`) turns the diagram into a PNG, the form an
+assistant reading the output can actually open and check. `pip install
+cairosvg` serves the same purpose and is used if that is what the machine has.
+Without either, the diagram is written as an SVG and nothing else changes.
 
-**Only if a diagram image has to be recognized automatically:**
-
-```bash
-pip install onnxruntime pillow numpy --break-system-packages
-```
-
-About 54 MB and a few seconds. The model itself ships with the skill, 1.3 MB
+The recognizer runtime that `--recognizer` adds is about 54 MB and a few
+seconds. The model itself ships with the skill, 1.3 MB
 of it, in `scripts/vendor/fenshot/`. It is optional by design: reading the
 diagram directly is usually faster, and the recognizer serves as a cross-check
 rather than the primary path.
@@ -322,6 +318,18 @@ was removed from `letta-ai/skills` in March 2026.)
 **[Full comparison, including where `chess-best-move` is the better choice → FAQ.md](FAQ.md)**
 
 ---
+
+## Which model
+
+Opus, Sonnet and Haiku. On 2026-10-02 the same mate in 4 went to Opus 5.5,
+Sonnet 5.5 and Haiku 4.5 in fresh claude.ai chats; all three found it, since
+that part is the script's. Where they differed was in the steps left to the
+model's judgement: Haiku dropped a setup line and never showed the diagram,
+and all three rewrote the setup lines. Since 2.33.0 setup is one script and
+`solve.py` ends by asking for the diagram to be sent, so less is left to
+judgement. Run again on 2.33.0, Haiku ran the setup as written and sent the
+diagram. In the first run it had also explained the key move wrongly, which no
+script can catch.
 
 ## Limitations
 
