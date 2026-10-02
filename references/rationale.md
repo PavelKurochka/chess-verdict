@@ -11,6 +11,23 @@ Measurements were taken on one core with Stockfish 16 and are there to be
 re-run, not believed. `CHANGELOG.md` has the same material arranged by release;
 this file arranges it by rule.
 
+## Contents
+
+Read the section a rule points to, not the whole file: `grep -n '^##'` lists the
+headings with their line numbers.
+
+- [Where the engine is the weak link](#where-the-engine-is-the-weak-link) — fortresses, decided endgames, the halfmove clock; [the 50-move probe](#the-50-move-probe)
+- [Reading the files of this skill](#reading-the-files-of-this-skill) — `view` once, `bash` for the rest
+- [The recognizer](#the-recognizer) — the model, its confidence floor, the shifted-board fix
+- [Never type a FEN for a position further down a line](#never-type-a-fen-for-a-position-further-down-a-line)
+- [Legality is a weak check](#legality-is-a-weak-check)
+- [The mate ladder](#the-mate-ladder) — what it finds, what it costs
+- [The comparison sheet](#the-comparison-sheet)
+- [The verdict](#the-verdict) — what counts as proof
+- [Timing](#timing) — why the journal is stopped, offered, and never piped
+- [Version discipline](#version-discipline)
+- [Moved from SKILL.md in 2.29.0](#moved-from-skillmd-in-2290) — setup, the search, confirming the reading, timing
+
 ## Where the engine is the weak link
 
 **The fortress.** On `8/p7/kpP5/qrp1b3/rpP2b2/pP2b3/P7/K7 w` Black is a queen,
@@ -411,7 +428,7 @@ The board is found by colour: the two square colours are the most common pixels 
 
 **Do not imitate a board in text.** Box-drawing characters and glyphs like `♞` only line up when the font gives both the same advance width, which usually fails outside a monospace terminal — and a verification aid that looks broken does not get looked at, which costs exactly the check it existed to provide. This applies just as much to a board the assistant draws by hand: show the rendered file.
 
-Whether to *stop and wait* for the user is a judgement, and both errors are real. Never stopping is how four shifted pieces reached a confident answer. Stopping every time is worse than it looks: a confirmation that fires on every position and is right most of the time trains the user to wave it through, at which point it costs a round trip and catches nothing. So:
+Whether to *stop and wait* for the user is a judgement, and both errors are real. Never stopping is how four shifted pieces reached a confident answer. Stopping every time is worse than it looks: a confirmation that fires on every position and is right most of the time trains the user to wave it through, at which point it costs a round trip and catches nothing. The rule that follows from this — show the diagram every time, stop only on a stated reason for doubt, otherwise give the verdict — is kept in `SKILL.md`, step 4, *Confirm the reading first*.
 
 ### Timing
 

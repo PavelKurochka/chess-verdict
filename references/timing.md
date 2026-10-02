@@ -5,6 +5,15 @@ almost none of it goes to the engine. Installs, a cold container, model loading
 starting up, and repeated runs dominate, and each of those is invisible unless
 it is measured.
 
+## Contents
+
+- [Recording is always on, printing is on request](#recording-is-always-on-printing-is-on-request)
+- [Wrapping commands](#wrapping-commands)
+- [Steps that have no command](#steps-that-have-no-command) — `--begin` / `--end`
+- [Reading the table](#reading-the-table)
+- [Stopping the clock](#stopping-the-clock) — `--stop`
+- [Per-run breakdowns](#per-run-breakdowns)
+
 ## Recording is always on, printing is on request
 
 `scripts/stage.py --start` runs as the first command of every analysis. It is

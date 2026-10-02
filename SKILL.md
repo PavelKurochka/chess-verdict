@@ -2,13 +2,13 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.31.2"
+  version: "2.32.0"
 description: >-
-  Deliver a verdict on a chess position with Stockfish: read the position from a
-  diagram image or a FEN string, confirm the reading is legal and the right way
-  up, then give the best move, the line behind it, why the defender's best tries
-  fail, and whether the win is a forced mate and of what length. Use it whenever
-  a concrete position is on the table: a photo or screenshot of a board, a FEN
+  Delivers a verdict on a chess position with Stockfish: reads the position from
+  a diagram image or a FEN string, confirms the reading is legal and the right
+  way up, then gives the best move, the line behind it, why the defender's best
+  tries fail, and whether the win is a forced mate and of what length. Use it
+  when a concrete position is on the table: a photo or screenshot of a board, a FEN
   string, or a puzzle ("find the win", "what should White play", "is this
   winning?", "is there a mate here?"). It covers positions from a game or a
   book, requests to check an engine evaluation, and questions with no puzzle
@@ -34,6 +34,18 @@ After the one-time setup nothing here needs the network except one optional quer
 **Confirm before the verdict, not before the search.** Searching is cheap; a confidently stated wrong answer is not. Search first, then confirm the reading, then speak.
 
 **The engine part costs seconds, not minutes.** `solve.py` stops on convergence rather than on the clock, one invocation covers best move, second-best and defences, and a normal run takes **2–10 seconds**. If a run is taking minutes, something is wrong with how it was invoked, not with the position.
+
+## Checklist
+
+Run down it before sending the answer; 5 and 6 are the ones skipped in practice.
+
+1. `stage.py --start`, then setup, its output not hidden.
+2. Side to move and orientation settled from labels, caption or the user — never guessed.
+3. Two readings compared; `STATUS_VALID`, or the illegality reported.
+4. `solve.py` once; side lines with `--line`.
+5. `stage.py --stop`.
+6. The diagram — `compare.png` for an image — opened and shown.
+7. The verdict claims no more than was proved.
 
 ## Where the engine is the weak link
 
@@ -208,7 +220,7 @@ What it does internally, and why:
 
 **`--quick` is not mate-blind; `--fast` is.** `--quick` drops the second line and the defences and keeps the ladder; combining it with `--scan full`, `--defences`, `--defence-time` or `--full-max` is an error rather than a silent override, since those settings would then decide nothing. `--fast` is the old mate-blind behaviour: it prints a line saying the ladder is off and refuses to be combined with `--mate-probe` rather than ignoring it. Use `--fast` only where a mate is out of the question, and prefer `--no-second` when the point is merely speed.
 
-Useful flags: `--line "MOVES"` to analyse the position a sequence of moves reaches, which is the only supported way to look further down a line; `--quick` for the evaluation alone; `--defences N` for a longer list of tries; `--scan full` for the complete enumeration; `--pv-plies` to lengthen the printed line; `--time` and `--min-depth` when a quiet endgame genuinely needs more depth; `--mate-probe` and `--probe-step` to lengthen or disable the ladder, `--reprobe-step` for the slow re-ask that follows a found mate; `--fifty-probe` and `--playout` for the fortress checks above; `--view` to draw the diagram from the source image's side, `--diagram` to force `png`, `svg` or `none`, `--text-board` to print the letter grid as well, `--diagram-path` to choose where the diagram is written; `--timing` for the per-stage breakdown.
+Other flags: `--pv-plies` to lengthen the printed line; `--time` and `--min-depth` when a quiet endgame genuinely needs more depth; `--diagram png|svg|none`, `--text-board` for the letter grid as well, `--diagram-path`; `--timing` for the per-stage breakdown. The rest are explained where they are used.
 
 ### What makes this slow — do not do it
 
@@ -300,7 +312,7 @@ The journal records the whole chain — installs, diagram reading, every `solve.
 
 **It has to be stopped.** `--stop` ends the span after the last command; a later command reopens it. A report on a journal that was never stopped still prints, but its coverage line says the number includes idle time, so the failure is visible rather than silent. ([Why this was added](references/rationale.md#timing).)
 
-**Do not print the table unless the user asks for it** — after every puzzle it is noise. **But when the run was slow enough to matter** — an install, a wait the user noticed, the budget warning — offer it in one closing line such as *"I can show where the time went, if that's useful"*. Never after a quick answer.
+**Do not print the table unless the user asks for it** — after every puzzle it is noise. When to offer it: item 6 of the verdict structure — an install, a wait the user noticed, the budget warning.
 
 When they do ask:
 

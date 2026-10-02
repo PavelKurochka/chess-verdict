@@ -157,9 +157,10 @@ def test_sheet_is_written():
         check("the comparison sheet is written", ok,
               (r.stderr.strip() or "")[:80])
         if ok:
-            sheet = Image.open(out)
+            with Image.open(out) as sheet:
+                width = sheet.width
             check("both boards are on it at full size",
-                  sheet.width > 2 * compare.SIZE, f"{sheet.width}px wide")
+                  width > 2 * compare.SIZE, f"{width}px wide")
 
 
 def test_mono_leaves_the_source_alone():

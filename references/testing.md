@@ -4,6 +4,12 @@ Everything here is for editing `chess-verdict`, never for answering a position.
 `SKILL.md` carries no copy of it, because a session that is solving a puzzle has
 no use for a regression baseline and pays for the words all the same.
 
+## Contents
+
+- [Reproducible runs](#reproducible-runs) — `--nodes`
+- [The suites](#the-suites) — the commands; [matetrack](#the-matetrack-suite); [what no suite measures](#what-no-suite-measures)
+- [What each test file is for](#what-each-test-file-is-for)
+
 ## Reproducible runs
 
 `--nodes N` is not for answering questions. It caps the search by node count instead of time and switches off both the convergence stop and the clock, so the result is bit-for-bit the same however loaded the machine is — which is what makes it possible to tell a change in the script from a change in the weather. It costs time to buy that. Use it when testing the skill, never when solving a position for someone.

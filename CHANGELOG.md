@@ -14,6 +14,47 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.32.0 — 2026-10-02
+
+Checked against Anthropic's *Skill authoring best practices* (prompted by a
+video that retells them). Of nine rules six held, two in part, one not; this
+release closes the gaps that cost nothing to close.
+
+**A seven-item checklist at the top of `SKILL.md`.** The steps were numbered,
+but nothing listed what an answer must have done before it is sent. The two
+misses seen in a live chat on 2026-10-01 — `stage.py --stop` not run, the
+rendered diagram not shown — are items 5 and 6, and the list says those are the
+ones skipped in practice.
+
+**`description` in the third person** — *Delivers … reads … confirms … gives*
+— as the guide asks, since the field is inserted into the system prompt.
+*Use it whenever* became *Use it when* so the 500th character still ends a
+sentence; 954 characters, as before.
+
+**Contents lists in `rationale.md`, `timing.md` and `testing.md`**, the three
+reference files over 100 lines. A session reads them with `bash`, where an
+anchor in a link leads nowhere; the list and a `grep -n '^##'` hint let it read
+one section instead of the whole file.
+
+**`rationale.md`: a paragraph that ended in "So:".** When the reasons behind
+"stop and wait" moved out of `SKILL.md` in 2.29.0, the list the colon
+introduced stayed behind. The sentence now names the rule and where it lives.
+
+To make room, the "Useful flags" paragraph keeps only the flags not explained
+elsewhere in `SKILL.md`, and the Timing section points to the verdict structure
+for when to offer the table instead of repeating it. `SKILL.md` is 40 468 bytes,
+148 fewer than before.
+
+**`tests/test_compare.py` closes the sheet it opens.** `Image.open` read only
+the width and left the file open, so on Windows the temporary directory could
+not be removed and the test died in cleanup after its checks had passed. On
+Linux nothing showed.
+
+Not done: the guide also asks for testing with every model that will run the
+skill. That comparison (Opus against Sonnet) is still to be made.
+
+---
+
 ## 2.31.2 — 2026-10-01
 
 **Setup runs `apt-get update` first.** Checked in a live claude.ai chat on
