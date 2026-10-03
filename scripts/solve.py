@@ -88,7 +88,7 @@ TABLEBASE_TIMEOUT = 6.0
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.33.0"
+VERSION = "2.34.0"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -307,6 +307,17 @@ TEXT = {
                       "them. It is an SVG, which you cannot open: "
                       "scripts/setup.py installs the rasteriser for a PNG.\n"
                       "  {path}",
+    "sheet_ok": "Comparison sheet, source on the left and this reading on "
+                "the right -- check it square by square:\n  {path}",
+    "sheet_failed": "WARNING: the comparison sheet was not built ({why}). "
+                    "Compare the diagram above against the source by eye.",
+    "sheet_no_source": "no such file: {path}",
+    "st_sheet": "building the comparison sheet (compare.py)",
+    "sheet_send": "\nLast step before answering: send the comparison sheet to "
+                  "the user as a file, once it has been checked. Writing it to "
+                  "disk does not show it to them.\n  {path}",
+    "notation": "Write moves as printed here ({san}) in any language: piece "
+                "letters stay K Q R B N unless the user asked for others.",
     "board_svg_failed": "WARNING: could not write the diagram to {path} ({err}) "
                         "-- falling back to the letter grid below; the analysis "
                         "is unaffected",
@@ -1704,6 +1715,39 @@ def run(args):
     print(t("board_counts",
             w=material(board, chess.WHITE), b=material(board, chess.BLACK)))
 
+    # The comparison sheet used to be a separate compare.py command after this
+    # one. On 2026-10-02 neither Haiku nor Sonnet ran it on an image, though
+    # both had installed what it needs. Run as a child process, so a missing
+    # Pillow costs the sheet and not the analysis.
+    sheet = None
+    if args.source:
+        # Beside the diagram, or where it was meant to go: falling back to the
+        # default folder when an explicit path failed put the sheet somewhere
+        # nobody asked for.
+        out_dir = os.path.dirname(written[0] if written else
+                                  args.diagram_path or default_diagram_path("png"))
+        sheet_path = os.path.join(out_dir or ".", "compare.png")
+        if not os.path.isfile(args.source):
+            why = t("sheet_no_source", path=args.source)
+        else:
+            r = subprocess.run(
+                [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "compare.py"), args.source,
+                 board.fen(), "-o", sheet_path,
+                 "--view", "black" if flip else "white"],
+                capture_output=True, text=True)
+            lines = (r.stderr or r.stdout).strip().splitlines()
+            why = lines[-1] if lines else f"exit code {r.returncode}"
+            if r.returncode == 0 and os.path.isfile(sheet_path):
+                sheet = sheet_path
+                for line in r.stderr.strip().splitlines():   # crop warnings
+                    print(line)
+        if sheet:
+            print(t("sheet_ok", path=sheet))
+            tl.stage(t("st_sheet"))
+        else:
+            print(t("sheet_failed", why=why))
+
     tl.stage(t("st_legal"))
 
     try:
@@ -2006,9 +2050,15 @@ def run(args):
         # a live run, and a file in /mnt/user-data/outputs is not shown to the
         # user unless the assistant sends it -- checked on claude.ai,
         # 2026-10-02. A script cannot send it; it can only be the last word.
-        if written:
+        if sheet:
+            print(t("sheet_send", path=sheet))
+        elif written:
             print(t("board_send" if written[1] == "png" else "board_send_svg",
                     path=written[0]))
+        # Haiku translated the piece letters in a non-English answer and gave
+        # the same rook two different ones. The rule was in SKILL.md; here it
+        # is the last line.
+        print(t("notation", san=root.san(root_pv[0])))
     except chess.engine.EngineTerminatedError:
         # Until 2.29.3 this was a traceback, preceded by the mate ladder saying
         # the budget ran out -- one second into thirty -- and advising a bigger
@@ -2159,6 +2209,11 @@ def parse_args(argv):
                         "Kept so existing invocations keep working")
     p.add_argument("--text-board", action="store_true",
                    help="print the letter grid as well as the rendered diagram")
+    p.add_argument("--source", default=None, metavar="IMAGE",
+                   help="the image the position was read from: also builds "
+                        "compare.png (source and reading side by side, via "
+                        "compare.py) next to the diagram, and asks for that "
+                        "sheet to be sent instead of the bare diagram")
     p.add_argument("--diagram-path", "--svg-path", dest="diagram_path",
                    default=None, metavar="PATH",
                    help="where the diagram is written; defaults to board.png or "

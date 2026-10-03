@@ -15,7 +15,7 @@
 #
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Tests for scripts/setup.py and for the diagram hand-off at the end of solve.py.
+"""Tests for scripts/setup.py and for what solve.py and img2fen.py print last.
 
 Run directly; no framework, no network, a few seconds:
 
@@ -157,17 +157,69 @@ def test_handoff_is_last():
                               else "board.svg")
         code, lines = solve_tail("--diagram-path", target)
         check("solve.py ends by asking for the diagram to be sent",
-              code == 0 and len(lines) >= 2
-              and lines[-2].startswith("Last step before answering")
-              and lines[-1].strip() == target,
-              " | ".join(lines[-2:]))
+              code == 0 and len(lines) >= 3
+              and lines[-3].startswith("Last step before answering")
+              and lines[-2].strip() == target,
+              " | ".join(lines[-3:-1]))
+        check("... and the very last line keeps the notation as printed",
+              lines[-1].startswith("Write moves as printed here (Ra8#)"),
+              lines[-1][:60])
         code, lines = solve_tail("--diagram", "none")
         check("... and says nothing of the kind when no diagram was written",
               code == 0 and not any("Last step" in x for x in lines))
 
 
+def test_source_builds_the_sheet():
+    """--source replaces the separate compare.py step neither model ran."""
+    if not (setup.have_engine() and setup.have_rasteriser()
+            and setup.have_module("PIL") and setup.have_module("numpy")):
+        print("skip  comparison sheet: needs the engine, a rasteriser, "
+              "Pillow and NumPy")
+        return
+    import chess
+    import chess.svg
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "source.png")
+        svg = chess.svg.board(chess.Board(FEN), size=480, coordinates=True)
+        subprocess.run(["rsvg-convert", "-o", src], input=svg.encode(),
+                       check=True)
+        target = os.path.join(tmp, "board.png")
+        sheet = os.path.join(tmp, "compare.png")
+        code, lines = solve_tail("--diagram-path", target, "--source", src)
+        check("--source writes compare.png beside the diagram",
+              code == 0 and os.path.isfile(sheet))
+        check("... and the hand-off names the sheet, not the bare diagram",
+              len(lines) >= 3 and "comparison sheet" in lines[-3]
+              and lines[-2].strip() == sheet, " | ".join(lines[-3:-1]))
+        code, lines = solve_tail("--diagram-path", target, "--source",
+                                 os.path.join(tmp, "missing.png"))
+        check("a missing source costs the sheet, not the analysis",
+              code == 0 and any("sheet was not built" in x for x in lines)
+              and lines[-2].strip() == target)
+
+
+def test_img2fen_asks_for_a_second_reading():
+    if not (setup.have_module("onnxruntime") and setup.have_module("PIL")
+            and setup.have_rasteriser()):
+        print("skip  img2fen reminder: needs onnxruntime, Pillow, rasteriser")
+        return
+    import chess
+    import chess.svg
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "source.png")
+        svg = chess.svg.board(chess.Board(FEN), size=480, coordinates=True)
+        subprocess.run(["rsvg-convert", "-o", src], input=svg.encode(),
+                       check=True)
+        r = subprocess.run([sys.executable, os.path.join(SCRIPTS, "img2fen.py"),
+                            src, "w"], capture_output=True, text=True)
+    check("img2fen.py asks for a reading by eye and for --source",
+          "This is one reading" in r.stdout and f"--source {src}" in r.stdout,
+          r.stdout.strip().splitlines()[-1][:60] if r.stdout.strip() else "")
+
+
 for fn in (test_refused_hosts, test_unknown_option, test_all_present,
-           test_engine_fails, test_handoff_is_last):
+           test_engine_fails, test_handoff_is_last, test_source_builds_the_sheet,
+           test_img2fen_asks_for_a_second_reading):
     fn()
 
 print()

@@ -28,7 +28,7 @@ python3 tests/test_reader.py                       # the recognizer, offline, ab
 python3 tests/test_reader.py --sweep               # the 900-render held-out figure, about 1 min
 python3 tests/test_tablebase.py                    # the tablebase probe, offline, instant
 python3 tests/test_tablebase.py --live             # plus one real query; SKIP if the host is not allowed
-python3 tests/test_setup.py                        # setup.py and the diagram hand-off, offline, a few seconds
+python3 tests/test_setup.py                        # setup.py and the last lines of solve.py/img2fen.py, a few seconds
 ```
 
 `selftest.py` refuses to run when `SKILL.md`, `scripts/solve.py` and `CHANGELOG.md` disagree about the version — a green suite against a build nobody can name is worth very little. It runs `solve.py` with `--scan off` on most rows and `--scan full` on the three that cover the verdict branches, and it must never be given `--quick`: that drops the search to MultiPV 1 and bypasses exactly the multi-line stopping bugs the suite exists to catch.
@@ -109,8 +109,11 @@ everything is already present it must skip every step and say `Ready`; the
 failure path runs against a stub `apt-get` that answers `update` with the
 sandbox's 403 and `install` with the error the container gave on 2026-10-01, so
 the run must show apt's own reason, call the 403 harmless and exit 1. That part
-needs a POSIX shell and is skipped on Windows. It also checks that `solve.py`
-ends with the request to send the diagram, and only when one was written.
+needs a POSIX shell and is skipped on Windows. It also checks the last lines of a
+run: `solve.py` asks for the diagram to be sent only when one was written, names
+`compare.png` instead when `--source` built it, and ends with the notation line;
+a missing source costs the sheet and not the analysis; `img2fen.py` asks for a
+reading by eye and for `--source`.
 
 `tests/test_reader.py` is the first offline cover the recognizer has had.
 It renders positions through `chess.svg` and `rsvg-convert`, reads them back

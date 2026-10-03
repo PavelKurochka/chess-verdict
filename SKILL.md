@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.33.0"
+  version: "2.34.0"
 description: >-
   Delivers a verdict on a chess position with Stockfish: reads the position from
   a diagram image or a FEN string, confirms the reading is legal and the right
@@ -44,7 +44,7 @@ Run down it before sending the answer; 5 and 6 are the ones skipped in practice.
 3. Two readings compared; `STATUS_VALID`, or the illegality reported.
 4. `solve.py` once; side lines with `--line`.
 5. `stage.py --stop`.
-6. The diagram — `compare.png` for an image — opened and sent to the user.
+6. The diagram — `compare.png` (`--source`) for an image — opened and sent to the user.
 7. The verdict claims no more than was proved.
 
 ## Where the engine is the weak link
@@ -77,7 +77,7 @@ Open `SKILL.md` once with `view`: that one line is the activation signal. Read e
 python3 scripts/setup.py                # add --image for a diagram image, --recognizer to run img2fen.py
 ```
 
-Run it exactly as written, from the skill's directory, at the start of every analysis — no pipe, no redirect, no extra lines. It starts the timing journal, installs the engine, python-chess and the rasteriser (`--image` adds Pillow and NumPy for `compare.py`, `--recognizer` onnxruntime as well, about 54 MB), skips whatever is already there, and prints one line per step. About twenty seconds the first time, under one after that. It ends `Ready: …` or `NOT READY: …`; on the second, say the engine did not install and do not analyse by hand.
+Run it exactly as written, from the skill's directory, at the start of every analysis — no pipe, no redirect, no extra lines. It starts the timing journal, installs the engine, python-chess and the rasteriser (`--image` adds Pillow and NumPy for the comparison sheet, `--recognizer` onnxruntime as well, about 54 MB), skips whatever is already there, and prints one line per step. About twenty seconds the first time, under one after that. It ends `Ready: …` or `NOT READY: …`; on the second, say the engine did not install and do not analyse by hand.
 
 From then on every command goes through the wrapper: `python3 scripts/stage.py "<label>" -- <command>`. It is closed by `python3 scripts/stage.py --stop` after the last command of the analysis — see [Timing](#timing). **The timing table is not printed unless the user asks for it.**
 
@@ -182,6 +182,7 @@ An illegal position is a diagnostic, not just an error. `OPPOSITE_CHECK` in part
 
 ```bash
 python3 scripts/stage.py "solving the position (solve.py)" -- python3 scripts/solve.py "5rrk/1p1n3p/4pp1Q/3pP3/p2N3P/P2P2P1/4qPK1/1R5R b - - 0 1"
+# from an image, add: --source <image> --view white   (or black: the image's side)
 ```
 
 Defaults are tuned for a single-core container and need no flags. One run prints the best move with its evaluation, the second-best move at the same depth, the main line, and the defender's best replies with their own evaluations and lines.
@@ -225,19 +226,11 @@ Every one of these has actually cost minutes in practice.
 
 `solve.py` renders the position it was given as a real diagram before anything else and prints the path it wrote — `board.png` when a rasteriser is installed, `board.svg` when none is — with per-side material counts underneath: a swapped colour is visible on the rendered board, a piece dropped from the reading altogether is not, and the counts catch both.
 
-**When the position came from an image, pass the image's side — `--view black` or `--view white` —** so the diagram faces the way the source does. By default it faces the side to move, and a Black-to-move book diagram would come out upside down against its source. `compare.py` takes the same `--view`.
+**When the position came from an image, pass the image itself and its side — `--source <image> --view white` (or `black`).** The diagram then faces the way the source does (by default it faces the side to move, so a Black-to-move book diagram would come out upside down), and the run also builds `compare.png`: the source cropped to its board beside the reading, one 8×8 grid ruled over both, so a square is at the same point in both halves.
 
-**Open that diagram, then send it to the user as a file** — the run ends by naming it. Both halves matter. Opening it is the check — the file is a PNG precisely so it can be read here and compared against the source square by square. Sending it is what lets the user catch a misread without being asked; a file written to `/mnt/user-data/outputs` and never sent is not shown to them.
+**Open that diagram — the sheet, for an image — then send it to the user as a file**; the run ends by naming it. Both halves matter. Opening it is the check — the file is a PNG precisely so it can be read here and compared against the source square by square. Sending it is what lets the user catch a misread without being asked; a file written to `/mnt/user-data/outputs` and never sent is not shown to them.
 
-**When the position came from an image, do that comparison on one sheet:**
-
-```bash
-python3 scripts/stage.py "building the comparison (compare.py)" -- python3 scripts/compare.py board.jpg "<FEN>" -o /mnt/user-data/outputs/compare.png
-```
-
-`compare.py` locates the board inside the source image, crops it to its outer edge, scales both boards to the same size and rules the same 8×8 grid over each, so a square is at the same point in both halves. Show this sheet in place of the bare rendered diagram; it needs Pillow and NumPy and says so if they are missing.
-
-The board is found by colour, with a second path for monochrome diagrams. Where neither works — a photograph of a physical board, most often — the script shows the source whole and says the grids may not line up. `--no-crop` forces that; `--view black` (or `--flipped`) is for a diagram drawn from Black's side.
+The sheet needs Pillow and NumPy (`setup.py --image`); without them the run says so and the bare diagram is what gets sent. The board is found by colour, with a second path for monochrome diagrams. Where neither works — a photograph of a physical board, most often — the source is shown whole and the run says the grids may not line up. `compare.py` builds the same sheet on its own, with `--no-crop` to force that.
 
 **The rendered board is grey by default**, not python-chess's brown, and the source half is left exactly as it arrived. That asymmetry is the point: the source is the evidence, so process the rendering and never the original. `--no-mono` goes back to the paired brown. ([Why](references/rationale.md#the-comparison-sheet).)
 

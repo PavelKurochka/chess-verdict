@@ -46,13 +46,13 @@ only wants to show the assistant a position and read the answer, start with
 
 Drop the directory into your skills folder — `~/.claude/skills/chess-verdict`
 for Claude Code, or upload the archive in the Claude app under
-**Customize → Skills**. Any current model works ([Which model](#which-model)).
+**Customize → Skills**. Use Opus or Sonnet, not Haiku ([Which model](#which-model)).
 
 The skill installs its own dependencies on first use, with one command:
 
 ```bash
 python3 scripts/setup.py                # engine, python-chess, rasteriser
-python3 scripts/setup.py --image        # + Pillow and NumPy for compare.py
+python3 scripts/setup.py --image        # + Pillow and NumPy for the comparison sheet
 python3 scripts/setup.py --recognizer   # + onnxruntime for img2fen.py
 ```
 
@@ -201,7 +201,13 @@ too — on a 16-position `matetrack` sample that is 2 mates found against 10 to 
 python3 scripts/img2fen.py board.jpg b            # b = Black to move
 python3 scripts/img2fen.py board.jpg --view black # diagram drawn from Black's side
 python3 scripts/img2fen.py board.jpg --timing     # where the time went
+python3 scripts/solve.py "<FEN>" --source board.jpg --view black   # + compare.png
 ```
+
+`--source` makes `solve.py` build `compare.png` beside its diagram: the source
+cropped to its board on the left, the reading on the right, one 8×8 grid over
+both. The run then ends by asking for that sheet to be sent to the user.
+`compare.py` builds the same sheet on its own.
 
 The reader locates the board itself, so a frame, a caption or a whole page around
 the diagram is not a problem and there is no margin ladder to tune. A reading
@@ -275,10 +281,14 @@ chess-verdict/
 │   ├── positions.tsv               the regression set, with expectations
 │   ├── hard.epd                    engine blind spots, checked by hand
 │   ├── test_stage.py               the timing journal's start/stop behaviour
+│   ├── test_setup.py               setup.py, and what solve.py and img2fen.py print last
+│   ├── test_ladder.py              what the mate ladder may claim, scripted engine
+│   ├── test_reader.py              the recognizer, on renders that carry their answer
 │   ├── test_compare.py             the board detector, on synthetic diagrams
 │   ├── test_verdict.py             the reporting rule, on constructed tables
 │   └── test_tablebase.py           the tablebase probe: refused vs failed, report
 └── scripts/
+    ├── setup.py                    installs what the run needs, starts the journal
     ├── solve.py                    search, mate ladder, gap, verdict
     ├── img2fen.py                  diagram → FEN, with orientation handling
     ├── reader_eval.py              the reader, measured across piece sets
@@ -321,15 +331,20 @@ was removed from `letta-ai/skills` in March 2026.)
 
 ## Which model
 
-Opus, Sonnet and Haiku. On 2026-10-02 the same mate in 4 went to Opus 5.5,
-Sonnet 5.5 and Haiku 4.5 in fresh claude.ai chats; all three found it, since
-that part is the script's. Where they differed was in the steps left to the
-model's judgement: Haiku dropped a setup line and never showed the diagram,
-and all three rewrote the setup lines. Since 2.33.0 setup is one script and
-`solve.py` ends by asking for the diagram to be sent, so less is left to
-judgement. Run again on 2.33.0, Haiku ran the setup as written and sent the
-diagram. In the first run it had also explained the key move wrongly, which no
-script can catch.
+Use Opus or Sonnet. Haiku runs the skill but is not recommended.
+
+The engine finds the moves, so all three models found the mate in every test
+run (2026-10-02 and 03: one position as a FEN, one as an image, one run per
+model and build). What differs is everything the scripts cannot do for the
+model. Since 2.33.0 and 2.34.0 setup is one command, `solve.py --source` builds
+the comparison sheet, and the run ends by asking for it to be sent; with those,
+Haiku ran every step. Its answers still were not trustworthy as text: it wrote
+moves in local piece letters despite the closing line, called 1...Kh8 forced where
+Black had three replies and 1...Bxg3 a check where it is none, sent the
+comparison sheet without looking at it, and left out the second-best move and
+the Lichess link. In its first run it explained the key move wrongly. Sonnet,
+on the same image, checked the sheet, kept the notation and gave the full
+answer, with one wrong aside.
 
 ## Limitations
 
