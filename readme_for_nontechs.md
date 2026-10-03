@@ -38,8 +38,10 @@ In the Claude app: **Customize → Skills**, upload `chess-verdict.zip`. After
 that it turns itself on when a position comes up. You do not have to mention it,
 and you do not have to say the words "Stockfish", "engine" or "FEN".
 
-Any model in the menu works, because the engine finds the moves. Opus and
-Sonnet explain the idea behind them more reliably than Haiku.
+Pick **Opus or Sonnet** in the model menu, not Haiku. Haiku finds the same
+moves, because the engine does that part, but in testing it mixed two
+alphabets in the piece letters, made wrong claims about the moves, and did not
+check the board it showed you.
 
 Then just show a position and ask, in whatever words you'd use with a person:
 

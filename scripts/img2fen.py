@@ -164,6 +164,11 @@ TEXT = {
                     "pass the first line on by default: a tactic solved for "
                     "the wrong side is a confident answer to a different "
                     "question.",
+    "second_reading": "\nThis is one reading. Read the diagram yourself too, "
+                      "rank by rank and then file by file, and settle every "
+                      "square where the two differ by looking at the image "
+                      "again. Then give solve.py the image as well, so it "
+                      "builds the comparison sheet: --source {image}{view}",
     "fen_if": "FEN if {side} to move: {fen}",
     "turn_forced": "Side to move: {side}. Not a guess: {side}'s king is in "
                    "check, and the side in check is always the side to move.",
@@ -538,6 +543,11 @@ def main():
         other = t("black") if args.view == "white" else t("white")
         print(t("warn_flip", other=other))
 
+    # A recognizer that reads right most of the time invites being trusted
+    # alone. Haiku did exactly that on 2026-10-02: one reading, no look at the
+    # image, no comparison sheet. The reminder sits where the FEN is picked up.
+    print(t("second_reading", image=args.image,
+            view=" --view black" if args.view == "black" else ""))
     report_stages(stages, _STARTED, args.timing)
     return 0
 

@@ -14,6 +14,56 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.34.0 — 2026-10-03
+
+Three more steps out of the model's judgement and into the scripts, after the
+same diagram image went to Haiku 4.5 and Sonnet 5.5 on 2026-10-02 (one run each,
+2.33.0). Both found the mate in 6 and read the board correctly. Neither built
+the comparison sheet, though both had run `setup.py --image` for it. Haiku took
+`img2fen.py`'s reading alone, never looking at the image, and wrote the moves
+with local-alphabet piece letters, the rook under two different ones. Sonnet
+read by eye and wrote a complete answer.
+
+**`solve.py --source <image>` builds `compare.png`.** It runs `compare.py` as a
+child process beside the diagram, with the diagram's own orientation, so a
+missing Pillow costs the sheet and not the analysis. When the sheet is built,
+the run's last request is to send it rather than the bare diagram. A source that
+does not exist, or a folder that cannot be written, is reported in one line.
+The separate `compare.py` command is gone from `SKILL.md`, which is 39 311
+bytes.
+
+**The last line of every analysis keeps the notation.** `Write moves as
+printed here (Rg3+) in any language: piece letters stay K Q R B N unless the
+user asked for others`, with the run's own best move as the example. The rule
+was already in `SKILL.md`; at the end of the output it is what is read last.
+
+**`img2fen.py` ends by asking for a second reading.** One reading by eye, rank
+by rank and file by file, with every disagreement settled against the image,
+and then `--source` with the image's path (and `--view black` when the reading
+was made that way).
+
+`tests/test_setup.py` covers all three. The README layout now lists
+`setup.py`, `test_setup.py`, `test_ladder.py` and `test_reader.py`.
+
+**Checked live on 2026-10-03 with a test build, same image, one run each.**
+Haiku 4.5 ran `img2fen.py`, followed its last line to `solve.py --source …
+--view white`, and sent `compare.png` without opening it first. Its notation
+was half fixed: the lines it copied from the output kept the Latin letters,
+the moves it wrote itself (the first move, the king's reply) did not. It also
+called 1...Kh8 forced and 1...Bxg3 a check, neither of which is true. Sonnet 5.5 read
+by eye, passed `--source … --view white`, opened the sheet, said both halves
+matched and sent it; its answer was complete and in Latin notation, with one
+wrong aside (the rook on g3 "defended only by the queen"; the h2 pawn defends
+it). Sonnet ran `setup.py` without `--image` and got the sheet anyway: Pillow
+and NumPy were already in the container.
+
+**README: Opus or Sonnet, not Haiku.** With every step it can be given in a
+script, Haiku still wrote answers that cannot be relied on as text. Both
+READMEs now recommend Opus or Sonnet and say why; `SKILL.md` is unchanged, since
+the model running a skill does not choose itself.
+
+---
+
 ## 2.33.0 — 2026-10-02
 
 **Setup is one script: `scripts/setup.py`.** On 2026-10-02 the same mate in 4
