@@ -14,6 +14,27 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.34.1 — 2026-10-04
+
+**A second `setup.py` no longer wipes the timing journal.** `setup.py` is run
+more than once per analysis: plain first, then with `--image` or `--recognizer`
+when the image turns out to need them, or again after a failed step. Every run
+truncated the journal and deleted the open `--begin` brackets, so the first
+installs, the first solve and the diagram reading disappeared from the table,
+and the `--end` that followed failed with `no open step`. Reproduced locally:
+`setup.py --image`, a wrapped command, `--begin`, `setup.py --recognizer` —
+the journal held only the second run's rows, and `--end` exited 2.
+
+`setup.py` now calls `stage.start_unless_running()`: the journal is kept when it
+was never closed by `--stop` and the journal or bracket file was written to in
+the last ten minutes (`stage.IDLE`); otherwise it starts afresh, as before. A
+stopped journal is a finished analysis; a long-idle one is an analysis whose
+`--stop` was forgotten, which the old reset quietly repaired and this keeps
+repairing. File mtime rather than row timestamps, because `solve.py` and
+`img2fen.py` write rows without one. `stage.py --start` still always resets.
+The rerun's `already installed` rows appear a second time in the table, which
+also shows that setup ran twice. New test in `tests/test_setup.py`.
+
 ## 2.34.0 — 2026-10-03
 
 Three more steps out of the model's judgement and into the scripts, after the

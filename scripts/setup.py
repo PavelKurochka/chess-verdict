@@ -37,7 +37,9 @@ Exit status: 0 when the engine and python-chess are usable, 1 when either is
 not -- in which case no analysis is possible and the answer has to say so. A
 missing rasteriser or imaging package is reported but does not fail the run.
 
-Every step is recorded in the timing journal (stage.py), which this starts.
+Every step is recorded in the timing journal (stage.py), which this starts --
+or continues, when it is run again in the middle of the same analysis (see
+stage.start_unless_running).
 """
 
 import importlib
@@ -141,10 +143,7 @@ def main(argv):
               f"(known: --image, --recognizer)", file=sys.stderr)
         return 2
 
-    with open(stage.JOURNAL, "w", encoding="utf-8") as f:
-        f.write(f"#start\t{time.time():.3f}\n")
-    if os.path.exists(stage.MARKS):
-        os.remove(stage.MARKS)
+    stage.start_unless_running()
 
     for label, present, cmd in plan(extras):
         if present is not None and present():

@@ -39,6 +39,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.join(HERE, os.pardir, "scripts")
@@ -217,8 +218,44 @@ def test_img2fen_asks_for_a_second_reading():
           r.stdout.strip().splitlines()[-1][:60] if r.stdout.strip() else "")
 
 
+def test_rerun_keeps_the_journal():
+    """A second setup.py in the same analysis used to wipe the journal."""
+    import stage
+    saved = stage.JOURNAL, stage.MARKS
+    with tempfile.TemporaryDirectory() as tmp:
+        stage.JOURNAL = os.path.join(tmp, "tl.tsv")
+        stage.MARKS = stage.JOURNAL + ".mark"
+        try:
+            check("no journal yet: started", not stage.start_unless_running())
+            stage.append(0, "first solve", 0.5)
+            stage.mark_begin("reading the diagram")
+            check("journal in progress: kept", stage.start_unless_running())
+            with open(stage.JOURNAL, encoding="utf-8") as f:
+                rows = f.read()
+            check("... with its rows and the open bracket",
+                  "first solve" in rows and os.path.exists(stage.MARKS))
+
+            old = time.time() - stage.IDLE - 60
+            for p in (stage.JOURNAL, stage.MARKS):
+                os.utime(p, (old, old))
+            check("idle longer than IDLE: started afresh",
+                  not stage.start_unless_running()
+                  and not os.path.exists(stage.MARKS))
+
+            stage.append(0, "second solve", 0.5)
+            with open(stage.JOURNAL, "a", encoding="utf-8") as f:
+                f.write(f"#stop\t{time.time():.3f}\n")
+            check("closed by --stop: started afresh",
+                  not stage.start_unless_running())
+            with open(stage.JOURNAL, encoding="utf-8") as f:
+                check("... and the old rows are gone",
+                      "second solve" not in f.read())
+        finally:
+            stage.JOURNAL, stage.MARKS = saved
+
+
 for fn in (test_refused_hosts, test_unknown_option, test_all_present,
-           test_engine_fails, test_handoff_is_last, test_source_builds_the_sheet,
+           test_rerun_keeps_the_journal, test_engine_fails, test_handoff_is_last, test_source_builds_the_sheet,
            test_img2fen_asks_for_a_second_reading):
     fn()
 

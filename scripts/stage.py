@@ -325,6 +325,43 @@ def report():
         print(t("coverage" if end is not None else "coverage_open"))
 
 
+def start():
+    """A fresh journal: header row only, no open brackets."""
+    with open(JOURNAL, "w", encoding="utf-8") as f:
+        f.write(f"#start\t{time.time():.3f}\n")
+    if os.path.exists(MARKS):
+        os.remove(MARKS)
+
+
+IDLE = 600
+
+
+def start_unless_running():
+    """Start the journal, unless the current analysis is still in progress.
+
+    setup.py calls this, and setup.py is run more than once per analysis: once
+    plain and again with --image or --recognizer when the image turns out to
+    need them, or again after a failed step. Each of those used to truncate the
+    journal and delete the open --begin brackets, so the installs, the first
+    solve and the diagram reading vanished from the table and the --end that
+    followed had nothing to close.
+
+    A journal counts as in progress when it was never closed by --stop and was
+    written to (journal or brackets) within IDLE seconds. A stopped journal is
+    a finished analysis, and a long-idle one is an analysis whose --stop was
+    forgotten; both are started afresh, as before. The file's mtime is used
+    rather than the rows' timestamps because solve.py and img2fen.py write
+    rows without one. Returns True when the journal was kept.
+    """
+    if started_at() is not None and stopped_at() is None:
+        last = max(os.path.getmtime(p) for p in (JOURNAL, MARKS)
+                   if os.path.exists(p))
+        if time.time() - last < IDLE:
+            return True
+    start()
+    return False
+
+
 def mark_begin(label):
     with open(MARKS, "a", encoding="utf-8") as f:
         f.write(f"{clean(label)}\t{time.time():.3f}\n")
@@ -353,10 +390,7 @@ def main():
         return 0
 
     if args[0] in ("--start", "--reset"):
-        with open(JOURNAL, "w", encoding="utf-8") as f:
-            f.write(f"#start\t{time.time():.3f}\n")
-        if os.path.exists(MARKS):
-            os.remove(MARKS)
+        start()
         # Silent by default: starting the journal is routine, and a line of
         # output here would appear in every single run.
         if "--verbose" in args:

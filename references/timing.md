@@ -18,7 +18,13 @@ it is measured.
 
 `scripts/setup.py` runs as the first command of every analysis and starts the
 journal itself, recording each install step as a row (`already installed` when
-it was skipped). Outside the skill's normal flow, `scripts/stage.py --start`
+it was skipped). Run again within the same analysis — with `--image` or
+`--recognizer` once the image turns out to need them, or after a failed step —
+it keeps the journal and any open `--begin` step, and appends its rows. It
+starts afresh only when the previous journal was closed by `--stop` or has had
+nothing written to it for ten minutes (`IDLE` in `stage.py`); up to 2.34.0 every
+run truncated it, and the installs, the first solve and the diagram reading
+vanished from the table. Outside the skill's normal flow, `scripts/stage.py --start`
 does the same without installing anything; it is silent and costs a fraction
 of a second.
 

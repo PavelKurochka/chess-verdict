@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.34.0"
+  version: "2.34.1"
 description: >-
   Delivers a verdict on a chess position with Stockfish: reads the position from
   a diagram image or a FEN string, confirms the reading is legal and the right
