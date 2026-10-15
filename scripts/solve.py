@@ -89,7 +89,7 @@ TABLEBASE_TIMEOUT = 6.0
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.35.0"
+VERSION = "2.35.1"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),

@@ -14,6 +14,29 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.35.1 — 2026-10-15
+
+Two sentences in `SKILL.md` contradicted the section 2.35.0 added, "When the
+question is how to win". Both corrections were in the 2.35 proposal and were
+left out of 2.35.0 without a decision; they turned up on a second reading of
+it. No script changed.
+
+**"If a run is taking minutes, something is wrong with how it was invoked"**
+now names its exceptions: a `--playout`, which announces the time it sets
+aside, and a question of how to win, which the new section says takes minutes.
+Read top-down, the rule came first and nothing pointed to the exception; a
+100-ply playout at 0.5 s a move is about a minute on its own.
+
+**"Who stands better and why"** no longer asks for "the main plans for both
+sides" from a `--quick` run. It asks for what the main line shows for each
+side — the engine's guess, not a plan — which is what the new section says:
+a long main line is not a plan.
+
+The version paragraph at the top is cut to the command that names the build
+and a link to `references/rationale.md`, "Version discipline", which already
+explains the three-site rule. `SKILL.md` is 39 547 bytes, 113 more than in
+2.35.0.
+
 ## 2.35.0 — 2026-10-15
 
 Written from one claude.ai chat (2026-10-14/15, Opus 5.5) on

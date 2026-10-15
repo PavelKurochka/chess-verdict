@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.35.0"
+  version: "2.35.1"
 description: >-
   Delivers a verdict on a chess position with Stockfish: reads the position from
   a diagram image or a FEN string, confirms the reading is legal and the right
@@ -23,7 +23,7 @@ description: >-
 
 *A position in, a verdict out: the move, the line behind it, and how far it was actually proved.*
 
-**The version is `metadata.version` in the frontmatter above.** It must match `VERSION` in `scripts/solve.py` and the top entry of `CHANGELOG.md`; `python3 scripts/solve.py --version` says which build is mounted, and `selftest.py` refuses to run when the three disagree. The number is deliberately not repeated here.
+**The version is `metadata.version` in the frontmatter above**; `python3 scripts/solve.py --version` says which build is mounted. The number is deliberately not repeated here ([why](references/rationale.md#version-discipline)).
 
 A picture or a FEN goes in; what comes back has been checked twice — once for whether the board was read correctly, once by the engine. The verdict states its own strength: a forced mate is called a forced mate, an advantage that merely survives the defender's best try is called that and no more.
 
@@ -33,7 +33,7 @@ After the one-time setup nothing here needs the network except one optional quer
 
 **Confirm before the verdict, not before the search.** Searching is cheap; a confidently stated wrong answer is not. Search first, then confirm the reading, then speak.
 
-**The engine part costs seconds, not minutes.** `solve.py` stops on convergence rather than on the clock, one invocation covers best move, second-best and defences, and a normal run takes **2–10 seconds**. If a run is taking minutes, something is wrong with how it was invoked, not with the position.
+**The engine part costs seconds, not minutes.** `solve.py` stops on convergence rather than on the clock, one invocation covers best move, second-best and defences, and a normal run takes **2–10 seconds**. If a run is taking minutes, something is wrong with how it was invoked, not with the position — unless `--playout` announced the time it sets aside, or the question is [how to win](#when-the-question-is-how-to-win).
 
 ## Checklist
 
@@ -294,7 +294,7 @@ The remainder row is split into gaps named after the command that followed each.
 
 ## When the answer is not a puzzle
 
-The same pipeline serves other questions. For "who stands better and why", run `--quick` and report the evaluation with the main plans for both sides. For "was this move a mistake", analyse the position before and after and compare evaluations — two `--quick` runs are enough, and they keep the mate ladder, so the comparison is not mate-blind; do not reach for `--fast` here. For opening positions, note that the engine's preference is not the same as theory and say so.
+The same pipeline serves other questions. For "who stands better and why", run `--quick` and report the evaluation and what the main line shows for each side — the engine's guess, not a [plan](#when-the-question-is-how-to-win). For "was this move a mistake", analyse the position before and after and compare evaluations — two `--quick` runs are enough, and they keep the mate ladder, so the comparison is not mate-blind; do not reach for `--fast` here. For opening positions, note that the engine's preference is not the same as theory and say so.
 
 Quiet and endgame positions are where evaluations drift with depth. If the assessment matters, raise `--time` and `--min-depth` together and say which depth the number came from. In an endgame, check the piece count first: at seven or fewer, depth is the wrong tool and the tablebase in step 4 is the right one.
 
