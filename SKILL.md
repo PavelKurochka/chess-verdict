@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.34.1"
+  version: "2.35.0"
 description: >-
   Delivers a verdict on a chess position with Stockfish: reads the position from
   a diagram image or a FEN string, confirms the reading is legal and the right
@@ -65,11 +65,11 @@ Three kinds of position make Stockfish state a number confidently and wrongly, a
 
 **A collapsed probe does not outrank a proof — and a list of centipawn scores is not one.** When every reply in a complete list was mated, the win is proved and the probe has only failed to show progress in ten plies, which is what a long win looks like; the script says so, and the answer reports the win and notes that the fifty-move count matters if the position came from a game. When the replies are decisive only in centipawns, the script says `an evaluation, not a proof`: that list is the same kind of number the probe has just contradicted, and `--playout` decides. ([The fortress behind this](references/rationale.md#the-verdict).)
 
-**What separates the two cases is where the clock first resets.** `--playout 60` plays the position out against itself and reports the ply at which the halfmove counter first reset — on Lucena between ply 14 and 19, on a fortress never. About twenty seconds, so it is off by default and worth running exactly when the probe has collapsed; raise `--budget` with it. Read how it ended: cut short by the budget proves nothing; a claimable draw with no reset is the fortress signature; running out of plies with no reset and no repetition has seen nothing yet — rerun with `--playout 100`, the fifty-move rule's own horizon.
+**What separates the two cases is where the clock first resets.** `--playout 60` plays the position out against itself, prints the moves and reports the ply at which the halfmove counter first reset — on Lucena between ply 14 and 19, on a fortress never. About twenty seconds, set aside on top of `--budget`, so it is off by default and worth running exactly when the probe has collapsed. Read how it ended: cut short proves nothing; a claimable draw with no reset is the fortress signature; running out of plies with no reset and no repetition has seen nothing yet — rerun with `--playout 100`, the fifty-move rule's own horizon. From eight men or more it stops at the first position the tablebase answers, and that answer is exact.
 
 ## Reading the files of this skill
 
-Open `SKILL.md` once with `view`: that one line is the activation signal. Read everything else in its directory — references, tests, scripts — with `bash` (`sed -n`, `cat`, `grep`). Every `view` under `/mnt/skills` emits another identical *Loaded skill chess-verdict* line, which says nothing about which build is running; the banner `solve.py` and `img2fen.py` print first does. ([What was measured](references/rationale.md#reading-the-files-of-this-skill).)
+Open `SKILL.md` once with `view`: that one line is the activation signal. Read everything else in its directory — references, tests, scripts — with `bash` (`sed -n`, `cat`, `grep`). Each further `view` there adds another identical *Loaded skill* line; the build is named by the scripts' banner. ([What was measured](references/rationale.md#reading-the-files-of-this-skill).)
 
 ## Setup
 
@@ -80,8 +80,6 @@ python3 scripts/setup.py                # add --image for a diagram image, --rec
 Run it exactly as written, from the skill's directory, at the start of every analysis — no pipe, no redirect, no extra lines. It starts the timing journal, installs the engine, python-chess and the rasteriser (`--image` adds Pillow and NumPy for the comparison sheet, `--recognizer` onnxruntime as well, about 54 MB), skips whatever is already there, and prints one line per step. About twenty seconds the first time, under one after that. It ends `Ready: …` or `NOT READY: …`; on the second, say the engine did not install and do not analyse by hand.
 
 From then on every command goes through the wrapper: `python3 scripts/stage.py "<label>" -- <command>`. It is closed by `python3 scripts/stage.py --stop` after the last command of the analysis — see [Timing](#timing). **The timing table is not printed unless the user asks for it.**
-
-The recognizer is a *second* reading rather than a replacement for the first: reading the position straight off the image is the normal path.
 
 ### Exact endgames: the one network setting
 
@@ -136,8 +134,6 @@ python3 scripts/stage.py "after the sacrifice" -- python3 scripts/solve.py "<FEN
 Moves may be SAN or UCI; move numbers and result markers are stripped, so a line pastes in as written. Each move is checked against the board in front of it, and a move that is not legal there stops the run — with the position, the reason and the moves that were actually available.
 
 **Legality cannot catch a hand-typed continuation and never could.** A placement reached by an impossible move is not an illegal position; it is a legal position the game cannot reach from here. So: the FEN is typed once, from the diagram or from the user. Every position after that is reached by playing moves. This is also the cheap route — the alternative is twenty-odd cold-start invocations. ([What this cost once](references/rationale.md#never-type-a-fen-for-a-position-further-down-a-line).)
-
-**When the recognizer fails or cannot be installed**, two browser tools read diagrams well and are worth offering to the user: [fenshot](https://fenshot.com/) runs entirely client-side and uploads nothing — it is the same recognizer `img2fen.py` uses, so it is a way for the user to check a reading rather than a second opinion — and [Chessputzer](https://www.ocf.berkeley.edu/~abhishek/putz) is good on book diagrams, but wants the board border *included* and cropped tightly, the opposite of what `img2fen.py` needs.
 
 ### Which side the board is drawn from — settle this first
 
@@ -214,7 +210,6 @@ Every one of these has actually cost minutes in practice.
 * **Do not ask for `MultiPV` over every legal move.** MultiPV suppresses the cutoffs that make the search fast; over thirty moves it costs about as much as thirty full searches.
 * **Do not run the engine by hand** through `printf ... | stockfish` with a fixed `sleep`: the search is either truncated or waited on for nothing.
 * **Do not explore side lines by typing a FEN per position.** `--line` reaches them in the same invocation, on a warm hash table, with every move checked.
-* **Do not install the recognizer runtime when no image needs recognizing.** It costs seconds rather than minutes now, so it is a small saving — but it is still work nobody asked for.
 * **Do not run a command outside the wrapper** once the journal is started. A step that is not measured does not appear in the report, and the total then quietly understates the work.
 * **Do not pipe, redirect or post-process the wrapper's output.** `stage.py` is transparent — it passes the child's stdout and stderr through unchanged and propagates its exit code — so the output is ordinary text meant to be read where it lands. Any JSON around it belongs to the surrounding tool harness; `stage.py` contains no JSON at all. Piping the wrapper into a parser destroys a completed analysis and buys nothing.
 
@@ -263,7 +258,7 @@ Give the idea, not a transcript. A good answer explains *why* the move works —
 
 Be precise about what was proved. When the reply list is the top-N sample, the honest claim is that the advantage survives the defender's best try — not that every defence has been refuted one by one. Only a full enumeration in which every reply is mated supports the stronger claim, and if it left replies marked `not scored`, the script says the proof is incomplete and so should the answer.
 
-When the run printed a re-probe note — *a mate in 6 was found first … that proved a mate in 4* — report the shorter distance and nothing about the longer one. The note exists so the assistant does not have to reconcile two mate scores in the same output; it is not a finding to pass on to the user, who only ever wanted the fastest win.
+When the run printed a re-probe note — *a mate in 6 was found first … that proved a mate in 4* — report the shorter distance and nothing about the longer one: the note is for the assistant, not a finding for the user.
 
 Report evaluations as they are: `+7.2` for Black means Black is winning by roughly seven pawns, `mate in 19` means a forced mate exists but is long. Do not round a forced mate down to "winning" or inflate a small advantage.
 
@@ -303,9 +298,20 @@ The same pipeline serves other questions. For "who stands better and why", run `
 
 Quiet and endgame positions are where evaluations drift with depth. If the assessment matters, raise `--time` and `--min-depth` together and say which depth the number came from. In an endgame, check the piece count first: at seven or fewer, depth is the wrong tool and the tablebase in step 4 is the right one.
 
+## When the question is how to win
+
+"No combination, the rest is technique" is usually followed by *show how*. That asks for a plan, and a plan has to work against every way of defending, which nothing above shows. Follow `references/technique.md`; it takes minutes, so say so first.
+
+* **The evaluation is not an argument for a plan.** A piece up, every sensible plan scores high, and equal scores mean the engine cannot tell two moves apart, not that an idea is refuted. Progress is what counts — captures, pawn moves, the king breaking in — and above all a position the tablebase calls won.
+* **A long main line is not a plan**, and a deeper run preferring another move inside search noise is not a correction.
+* **Name the defender's setups piece by piece** before claiming a plan; test the user's objection from the line given last.
+* **Report each branch at the level its own output proved**, never higher.
+
 ## Reference
 
-`references/reading-diagrams.md` — reading a diagram into FEN by hand when the recognizer is unavailable or wrong, with the sanity checks.
+`references/reading-diagrams.md` — reading a diagram into FEN by hand when the recognizer is unavailable or wrong, with the sanity checks, and two browser tools to offer the user.
+
+`references/technique.md` — showing how a won position is won: setups, branches, playouts, the write-up.
 
 `references/timing.md` — the timing journal: what it records, bracketing steps with no command, reading the table.
 

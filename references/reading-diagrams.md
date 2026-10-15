@@ -87,3 +87,7 @@ The pawns give the direction: White's pawns advance toward Black's side, so on a
 ## When the recognizer and the manual reading disagree
 
 Look at the specific squares that differ, in the original image, at full resolution. Do not average the two readings and do not default to the machine. The disagreement is almost always on one or two squares and is quick to settle.
+
+## Two browser tools to offer the user
+
+When the recognizer fails or cannot be installed, two browser tools read diagrams well and are worth offering to the user. [fenshot](https://fenshot.com/) runs entirely client-side and uploads nothing — it is the same recognizer `img2fen.py` uses, so it is a way for the user to check a reading rather than a second opinion. [Chessputzer](https://www.ocf.berkeley.edu/~abhishek/putz) is good on book diagrams, but wants the board border *included* and cropped tightly, the opposite of what `img2fen.py` needs. (Moved here from `SKILL.md` in 2.35.0.)

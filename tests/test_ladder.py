@@ -210,6 +210,137 @@ check("a reset settles it: no limit note",
       "playout_limit" not in solve.playout_notes(
           {**base, "first_reset": 53, "plies": 60}, 60))
 
+# --- the playout since 2.35.0: its own time, its moves, the tablebase anchor --
+
+check("the chat's playout fits its reserve: 100 plies at 0.8 s",
+      solve.playout_reserve(100, 0.8, False) >= 100 * 0.8 + 5,
+      "--budget 60 cut it at ply 62")
+check("... and a possible tablebase query adds its timeout",
+      solve.playout_reserve(100, 0.8, True)
+      == solve.playout_reserve(100, 0.8, False) + solve.TABLEBASE_TIMEOUT)
+check("the cut note no longer sends the reader to --budget",
+      "does not help" in solve.t("playout_cut", plies=62, asked=100))
+
+ses = session(Shuffler(), 0.0)
+ses.reserve(solve.playout_reserve(6, 0.01, False))
+res = ses.playout(chess.Board(), plies=6, step=0.01)    # before the repetition
+check("a reserve lets the playout run after the budget is spent",
+      res["reason"] == "done" and res["plies"] == 6,
+      f"{res['reason']} after {res['plies']} plies")
+ses = session(Shuffler(), 60)
+ses.reserve(10)
+check("a reserve is added to a deadline still ahead, not to now",
+      65 < ses.left() <= 70, f"{ses.left():.1f} s left")
+
+
+class Script:
+    """Plays fixed moves; every evaluation is `cp` from White's side."""
+
+    def __init__(self, ucis, cp=600):
+        self.ucis, self.cp, self.i = list(ucis), cp, 0
+
+    def analyse(self, board, limit, **kwargs):
+        move = chess.Move.from_uci(self.ucis[self.i])
+        self.i += 1
+        return {"score": chess.engine.PovScore(chess.engine.Cp(self.cp),
+                                               chess.WHITE),
+                "pv": [move]}
+
+
+class Tablebase:
+    """Stands in for tablebase_query; records every position it was asked."""
+
+    def __init__(self, kind, data):
+        self.answer, self.asked = (kind, data), []
+
+    def __call__(self, fen):
+        self.asked.append(fen)
+        return self.answer
+
+
+EIGHT = chess.Board("k7/pp6/8/8/8/8/PP6/K1R4r w - - 0 1")   # Rxh1 leaves seven
+MOVES = ["c1h1", "a7a6", "h1h2", "a6a5"]
+
+
+def anchored(kind, data, cp=600, board=EIGHT):
+    tb = Tablebase(kind, data)
+    res = session(Script(MOVES, cp), 60).playout(board, plies=4, step=0.01,
+                                                  tablebase=tb)
+    return res, tb
+
+
+res, tb = anchored("ok", {"category": "loss"})        # Black to move, lost
+notes = solve.playout_notes(res, 4)
+report = "\n".join(solve.playout_report(res, 4, EIGHT, 0.01, 10.1))
+check("the playout stops at the first seven-man position the tablebase answers",
+      res["reason"] == "tablebase" and res["anchor"]["ply"] == 1
+      and res["anchor"]["men"] == 7 and len(tb.asked) == 1,
+      f"{res['reason']}, asked {len(tb.asked)}")
+check("... with the category turned round to the side that played out",
+      res["anchor"]["category"] == "win" and "for White the position is won"
+      in report)
+check("... and a won anchor carries no warning",
+      "playout_anchor" in notes and "playout_anchor_lost" not in notes
+      and "playout_anchor_promo" not in notes, str(notes))
+check("the report prints the moves and the clock resets",
+      "Moves: 1. Rxh1" in report and "1 Rxh1 (rook)" in report)
+check("the header states the time set aside",
+      "10 s set aside on top of --budget" in report)
+
+res, _ = anchored("ok", {"category": "draw"})
+check("a drawn anchor from a decisive start says the conversion failed",
+      "playout_anchor_lost" in solve.playout_notes(res, 4))
+res, _ = anchored("ok", {"category": "draw"}, cp=20)
+check("... but not from an equal start, where there was nothing to convert",
+      "playout_anchor_lost" not in solve.playout_notes(res, 4))
+res, _ = anchored("ok", {"category": "win"}, cp=-1100)  # Black to move wins
+check("the side judged is the one the evaluation favoured, as in a fortress",
+      "playout_anchor_lost" not in solve.playout_notes(res, 4),
+      "White to move at the start, Black a rook up")
+
+res, tb = anchored("blocked", "HTTP 403")
+notes = solve.playout_notes(res, 4)
+check("a refused tablebase is asked once and the playout goes on",
+      len(tb.asked) == 1 and res["reason"] == "done" and res["plies"] == 4,
+      f"asked {len(tb.asked)}, {res['reason']} after {res['plies']}")
+check("... and the report says so",
+      "playout_tb_none" in notes and "allowlist refuses tablebase.lichess.ovh" in "\n".join(
+          solve.playout_report(res, 4, EIGHT, 0.01, 10.1)))
+
+SEVEN = chess.Board("k7/pp6/8/8/8/8/PP6/K6R b - - 0 1")
+tb = Tablebase("ok", {"category": "win"})
+res = session(Script(["a7a6", "h1h2"]), 60).playout(SEVEN, plies=2, step=0.01,
+                                                     tablebase=tb)
+check("from seven men or fewer the playout does not ask again",
+      tb.asked == [] and res["anchor"] is None and res["plies"] == 2)
+
+anchor = {"ply": 40, "men": 7, "fen": EIGHT.fen(), "category": "win"}
+promo = dict(base, first_reset=5, plies=40, reason="tablebase", anchor=anchor,
+             first=chess.engine.Cp(600))
+check("a promotion before the anchor is flagged: it confirms the queen only",
+      "playout_anchor_promo" in solve.playout_notes({**promo, "promoted": 30}, 60))
+check("... and one after it is not",
+      "playout_anchor_promo" not in solve.playout_notes(
+          {**promo, "promoted": None}, 60))
+
+LINE = [chess.Move.from_uci(u) for u in
+        ("e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5c6", "d7c6")]
+check("movetext numbers the moves",
+      solve.playout_movetext(chess.Board(), LINE, []) ==
+      "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Bxc6 dxc6")
+after_e4 = chess.Board()
+after_e4.push(LINE[0])
+check("... from Black's move too",
+      solve.playout_movetext(after_e4, LINE[1:3], []) == "1... e5 2. Nf3")
+check("... with an evaluation every N plies, from the playing side",
+      solve.playout_movetext(chess.Board(), LINE[:3],
+                             [chess.engine.Cp(10), chess.engine.Cp(20),
+                              chess.engine.Mate(3)], every=2)
+      == "1. e4 e5 {#3} 2. Nf3")
+check("the clock resets name what was taken",
+      solve.playout_resets(chess.Board(), LINE) ==
+      ["1 e4", "2 e5", "6 a6", "7 Bxc6 (knight)", "8 dxc6 (bishop)"])
+
 # --- the main search: a mate found at the stop depth is kept ---------------
 
 class Stream:

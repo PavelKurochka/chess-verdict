@@ -249,7 +249,8 @@ good on book diagrams.
 | `--fast` | — | Evaluation only **and** the ladder off — not for sharp positions |
 | `--tablebase` | `auto` | At ≤7 pieces ask the Lichess tablebase; `off` prints only its URL |
 | `--fifty-probe` | `auto` | Re-check the evaluation with the halfmove clock at 90 |
-| `--playout N` | — | Play the position out against itself; report the first clock reset |
+| `--playout N` | — | Play the position out against itself; print the moves and report the first clock reset. Its time is set aside on top of `--budget`; from eight men or more it stops at the first position the tablebase answers |
+| `--playout-step` | 0.3 s | Thinking time per move in the playout |
 | `--view auto\|white\|black` | auto | Side the diagram, letter grid and Lichess link are drawn from; pass the source image's side |
 | `--nodes N` | — | Reproducible mode for testing the skill, not for answering |
 | `--diagram` | `auto` | `png`, `svg`, or `none` for the letter grid |
@@ -275,6 +276,7 @@ chess-verdict/
 ├── references/
 │   ├── reading-diagrams.md         reading a diagram into FEN by hand
 │   ├── timing.md                   the timing journal
+│   ├── technique.md                showing how a won position is won
 │   ├── rationale.md                the evidence behind the rules in SKILL.md
 │   └── testing.md                  the suites and the matetrack baseline
 ├── tests/

@@ -24,6 +24,7 @@ headings with their line numbers.
 - [The mate ladder](#the-mate-ladder) — what it finds, what it costs
 - [The comparison sheet](#the-comparison-sheet)
 - [The verdict](#the-verdict) — what counts as proof
+- [Technique: how, not whether](#technique-how-not-whether) — a plan is not a verdict; the playout's own time and its tablebase stop
 - [Timing](#timing) — why the journal is stopped, offered, and never piped
 - [Version discipline](#version-discipline)
 - [Moved from SKILL.md in 2.29.0](#moved-from-skillmd-in-2290) — setup, the search, confirming the reading, timing
@@ -355,6 +356,69 @@ previously required a reply that holds and so could never fire in the case it
 was written for — a position where *every* reply loses and only the toughest one
 is unresolved. That case gets its own, weaker line: the win is forced and only
 the distance is open.
+
+## Technique: how, not whether
+
+**2.35.0.** On `8/8/1pkp4/4p3/2P1P3/2KB2r1/7R/8 w` — rook, bishop and two pawns
+against rook and three pawns, no forced win — the first answer (claude.ai,
+2026-10-14, Opus 5.5) was right and said so: depth 17, +3.17, 1.Rd2 and 1.Rb2
+equivalent, the rest is technique. The user asked to be shown the technique,
+and the next fourteen answers built it with no procedure:
+
+- **The first move changed twice**, 1.Rd2 → 1.Rh8 → 1.Rb2, the first time on a
+  `--no-second` run, which cannot rank its move against any other, announced
+  as "a correction". 1.Rh8 then lost a tempo against the defence the user
+  raised next (1.Rh8 Re3 2.Rh2).
+- **A 40-ply main line was offered as the plan** and its Black moves as "the
+  only counterplay". The user's first question — the king simply staying on
+  c6–c7 — was a defence the line had never compared.
+- **The evaluation was offered as an argument**: "+3.8 at depth 29 is the
+  objective support here". The user's reply turned the session: the number is
+  large everywhere because the piece is extra, and it gives no plan. Defences
+  were ranked by centipawns in four answers with four different conclusions.
+- **A restricted self-play was summarised from memory** as "eight exits from
+  the setup, all in check"; six were checks and two were a bare king.
+- **One branch was played to mate and its sibling only walked**; the user
+  noticed first ("and 2a?").
+- **`--playout 100 --playout-step 0.8 --budget 60` stopped at ply 62.** The
+  playout got what the main search left of the budget; 100 plies at 0.8 s is
+  80 s, more than the whole budget. `--budget` had been raised, as `SKILL.md`
+  then said to, and not by enough. The run printed no moves, so the answer
+  could quote only the first reset (ply 23, Rxd6) and the last score.
+
+What finally answered the question was a pass assembled from four ad-hoc
+scripts, about 370 lines: MultiPV 4 at every Black move of every line, every
+stubborner alternative played out by the engine against itself, two games at a
+time, each game checked at its first position with seven men or fewer against
+the Lichess tablebase. Nine games, all won; one setup no answer had considered
+(the king to the kingside, giving up b6); three stubborner defences. In eight
+games the tablebase settled the result at moves 20–29 and the games went on to
+mate at moves 34–53 — 154 moves played after the result was exact. In the ninth
+the first seven-man position followed a promotion, so its tablebase check
+confirmed a queen and said nothing about the conversion; the user found that
+one too. The pass took about sixteen minutes.
+
+**What 2.35.0 takes from it, and what it leaves.** The playout's time is now
+its own (`playout_reserve`: plies × step × 1.25 + 5 s, plus the tablebase
+timeout when a query may be made), it prints its moves and the plies that
+reset the clock, and from eight men or more it stops at the first position the
+tablebase answers, flagging an anchor reached only after a promotion and a
+drawn anchor from a decisive start. `SKILL.md` gets four rules and a pointer to
+`references/technique.md`. A separate script for the pass itself — walking
+lines with MultiPV, playing branches out in parallel, holding a setup the user
+names — was proposed in a claude.ai chat on 2026-10-15 and is deferred until a
+second position has been through the procedure. So is its threshold: the
+proposal wanted defender alternatives flagged at 0.025 in winning chances
+rather than the gap label's 0.05, on two 0.4-pawn gaps from an early walk that
+the chat itself had called noise. The alternatives that mattered in the final
+pass — 5…Re2, the kingside setup, at 0.063, and 8…Kd8 at 0.056 — clear 0.05
+already; 10…Kb8 (0.038) and 12…Re7 (0.026) do not, and both led to the same
+lost ending by another road.
+
+**The fortress lesson from the other side.** There the number overstated a
+draw as a rout; here it was true and said nothing about how the win is made.
+Either way the evaluation is not the argument — progress is, and an exact
+answer where one exists.
 
 ## Timing
 

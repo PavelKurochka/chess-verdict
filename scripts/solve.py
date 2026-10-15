@@ -47,6 +47,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import urllib.error
 import urllib.request
 import json
@@ -88,7 +89,7 @@ TABLEBASE_TIMEOUT = 6.0
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.34.1"
+VERSION = "2.35.0"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -256,15 +257,38 @@ TEXT = {
                                    "the clock first resets.",
     "st_playout": "playout of {plies} plies, {step:.1f} s a move",
     "playout_header": "\nPlayout ({plies} plies, {step:.1f} s a move, both "
-                      "sides by the same engine):",
+                      "sides by the same engine; {reserve:.0f} s set aside "
+                      "on top of --budget):",
     "playout_reset": "  the halfmove clock first reset at ply {ply} ({san}) -- "
                      "progress is real, the position is not a fortress.",
     "playout_no_reset": "  {plies} plies with no capture and no pawn move; the "
                         "clock reached {hm}. Nothing was converted, which is "
                         "what a fortress looks like.",
     "playout_cut": "  NOTE: the playout stopped at {plies} of the {asked} "
-                   "plies asked for, because the budget ran out -- raise "
-                   "--budget for the full run before drawing a conclusion.",
+                   "plies asked for, because its time ran out -- a truncated "
+                   "playout proves nothing. Ask for fewer plies or a shorter "
+                   "--playout-step; raising --budget does not help, the "
+                   "playout's time is set aside separately.",
+    "playout_anchor": "  at ply {ply} the board is down to {men} men and the "
+                      "tablebase answers it exactly: for {side} the position "
+                      "is {verdict}. The playout stops there -- past this "
+                      "point the engine would only be guessing at what is "
+                      "known.\n  Position at that ply: {link}",
+    "playout_anchor_lost": "  The self-play did not convert: either the "
+                           "starting position is not won, or a move above "
+                           "gave the win away, and the playout cannot tell "
+                           "which. Check the moves before ply {ply} with "
+                           "--line.",
+    "playout_anchor_promo": "  NOTE: a pawn was promoted at ply {promo}, "
+                            "before seven men were reached, so the tablebase "
+                            "confirms the ending after the promotion, not the "
+                            "conversion that produced it -- the moves up to "
+                            "it are self-play, not proof.",
+    "playout_tb_none": "  at ply {ply} the board was down to {men} men, but "
+                       "the tablebase did not answer ({why}); the playout "
+                       "went on without it.",
+    "playout_moves": "  Moves: ",
+    "playout_resets": "  Clock resets, by ply: ",
     "playout_over": "  the game ended after {ply} plies: {result}.",
     "playout_claimable": "  after {ply} plies a draw can be claimed -- "
                          "repetition or the fifty-move rule -- which is how a "
@@ -451,6 +475,8 @@ TEXT = {
     "t_total": "TOTAL",
     "t_budget": "of a {budget:.0f} s budget",
     "t_short": "\nSearch time: {dt:.1f} s of a {budget:.0f} s budget",
+    "t_short_playout": "\nSearch time: {dt:.1f} s of a {budget:.0f} s budget "
+                       "plus {reserve:.0f} s set aside for the playout",
     "budget_warn": "WARNING: the budget is exhausted and part of the analysis "
                    "was cut short -- raise --budget if needed.",
     "unit": "s",
@@ -659,7 +685,7 @@ def enumeration_verdict(best_score, rows, win):
     return out
 
 
-def playout_notes(res, asked):
+def playout_notes(res, asked, win=400):
     """The lines a playout earns, in order. Pure, for the tests.
 
     `playout_cut` only when the budget stopped it. A game that ended, or
@@ -673,6 +699,28 @@ def playout_notes(res, asked):
         keys.append("playout_over")
     elif res["claimable"]:
         keys.append("playout_claimable")
+    # The tablebase answer where the board first came down to seven men. A
+    # promotion before it means the anchor confirms a queen, not the
+    # conversion: in the chat this was written on (references/rationale.md,
+    # "Technique"), one of nine games reached seven men only after c8=Q, and
+    # its tablebase check said nothing about the twenty moves that mattered.
+    anchor = res.get("anchor")
+    if anchor:
+        keys.append("playout_anchor")
+        # Judged for the side the starting evaluation favoured -- in the
+        # fortress it is the side not to move -- and only when that evaluation
+        # was decisive: a draw reached from an equal start converted nothing
+        # because there was nothing to convert.
+        first = res.get("first")
+        lead = first.score(mate_score=100000) if first is not None else 0
+        cat = anchor["category"] if lead > 0 else TB_FLIP.get(
+            anchor["category"], "unknown")
+        if abs(lead) >= win and cat not in TB_CONVERTED:
+            keys.append("playout_anchor_lost")
+        if res.get("promoted") is not None and res["promoted"] <= anchor["ply"]:
+            keys.append("playout_anchor_promo")
+    elif res.get("tb_problem"):
+        keys.append("playout_tb_none")
     # A run that simply used up its plies with no reset and no repetition has
     # not seen a fortress; it has seen nothing yet. On the queen-and-pawns win
     # the --line rows are built on, the first reset came at ply 53 of 60.
@@ -685,6 +733,136 @@ def playout_notes(res, asked):
     elif res.get("reason") == "error":
         keys.append("playout_error")
     return keys
+
+
+#: Tablebase categories, from the playing-out side's point of view, that count
+#: as a converted win. A cursed win is a draw under the fifty-move rule, and
+#: the clock at an anchor is always fresh -- the capture that brought the board
+#: down to seven men reset it -- so it is no excuse there.
+TB_CONVERTED = ("win", "maybe-win")
+
+
+def playout_reserve(plies, step, tablebase):
+    """Seconds set aside for --playout on top of --budget. Pure, for the tests.
+
+    Until 2.35.0 the playout got whatever the main search and the defences
+    left of --budget, and SKILL.md asked for --budget to be raised along with
+    it. In a live chat `--playout 100 --playout-step 0.8 --budget 60` asked for
+    80 s of play inside a 60 s budget and stopped at ply 62 of 100: --budget
+    had been raised, as the rule said, and not by enough. The arithmetic is the
+    script's to do. A quarter on top covers the engine's per-move overhead; one tablebase
+    query, when the playout may ask one, gets its timeout.
+    """
+    return plies * step * 1.25 + 5.0 + (TABLEBASE_TIMEOUT if tablebase else 0.0)
+
+
+def _brief(score):
+    """An evaluation short enough to sit inside a line of moves."""
+    if score is None:
+        return "?"
+    if score.is_mate():
+        n = score.mate()
+        return f"#{n}" if n >= 0 else f"#-{-n}"
+    return f"{score.score() / 100:+.1f}"
+
+
+def playout_movetext(board, moves, scores, every=10):
+    """Numbered SAN for a playout, with an evaluation in braces every `every`
+    plies. Pure, for the tests.
+
+    `scores[i]` is the evaluation of the position before ply i+1, from the
+    playing-out side's point of view, so the one after ply k is scores[k].
+    Without the moves a playout could report only its first reset and its last
+    number: the chat behind 2.35.0 had to say so to a user who had asked to be
+    shown how the win goes.
+    """
+    b = board.copy(stack=False)
+    parts = []
+    for i, move in enumerate(moves):
+        if b.turn == chess.WHITE:
+            parts.append(f"{b.fullmove_number}.")
+        elif i == 0:
+            parts.append(f"{b.fullmove_number}...")
+        parts.append(b.san(move))
+        b.push(move)
+        k = i + 1
+        if k % every == 0 and k < len(scores):
+            parts.append("{" + _brief(scores[k]) + "}")
+    return " ".join(parts)
+
+
+def playout_resets(board, moves):
+    """The plies that reset the halfmove clock -- captures, pawn moves -- with
+    what was taken. Pure, for the tests.
+
+    These are the progress a conversion is made of, and what the playout
+    exists to watch for; a list of them is the plan's skeleton without the
+    shuffling between.
+    """
+    b = board.copy(stack=False)
+    out = []
+    for i, move in enumerate(moves, 1):
+        if b.is_zeroing(move):
+            san = b.san(move)
+            if b.is_en_passant(move):
+                taken = chess.PAWN
+            else:
+                piece = b.piece_at(move.to_square)
+                taken = piece.piece_type if piece else None
+            out.append(f"{i} {san}" + (f" ({chess.piece_name(taken)})"
+                                       if taken else ""))
+        b.push(move)
+    return out
+
+
+def playout_report(res, asked, board, step, reserve, win=400):
+    """Every line --playout prints, in order. Pure, for the tests."""
+    side = t("white") if board.turn == chess.WHITE else t("black")
+    lines = [t("playout_header", plies=res["plies"], step=step,
+               reserve=reserve)]
+    anchor = res.get("anchor") or {}
+    problem = res.get("tb_problem") or {}
+    for key in playout_notes(res, asked, win):
+        if key == "playout_reset":
+            lines.append(t(key, ply=res["first_reset"], san=res["reset_san"]))
+        elif key in ("playout_over", "playout_claimable"):
+            lines.append(t(key, ply=res["plies"], result=res["result"]))
+        elif key == "playout_anchor":
+            word = "tb_w_" + anchor["category"]
+            lines.append(t(key, ply=anchor["ply"], men=anchor["men"],
+                           side=side,
+                           verdict=t(word if word in TEXT else "tb_w_unknown"),
+                           link="https://lichess.org/analysis/"
+                           + anchor["fen"].replace(" ", "_")))
+        elif key == "playout_anchor_lost":
+            lines.append(t(key, ply=anchor["ply"]))
+        elif key == "playout_anchor_promo":
+            lines.append(t(key, promo=res["promoted"]))
+        elif key == "playout_tb_none":
+            lines.append(t(key, ply=problem["ply"], men=problem["men"],
+                           why=problem["why"]))
+        else:
+            lines.append(t(key, plies=res["plies"], hm=res["halfmove_clock"],
+                           asked=asked))
+    if res["first"] is not None:
+        lines.append(t("playout_evals", first=fmt(res["first"]),
+                       last=fmt(res["last"])))
+    moves = res.get("moves") or []
+    if moves:
+        # A move number stays on the line of its move: "8." at the end of one
+        # line and "Kg2" at the start of the next reads as two tokens.
+        text = re.sub(r"(\d+\.+) ", "\\1\x1f",
+                      playout_movetext(board, moves, res.get("scores") or []))
+        lines.append(textwrap.fill(
+            text, width=100, initial_indent=t("playout_moves"),
+            subsequent_indent="    ", break_on_hyphens=False).replace("\x1f", " "))
+        resets = playout_resets(board, moves)
+        if resets:
+            lines.append(textwrap.fill(
+                ", ".join(resets), width=100,
+                initial_indent=t("playout_resets"), subsequent_indent="    ",
+                break_on_hyphens=False))
+    return lines
 
 
 def upside_down(board):
@@ -1084,6 +1262,12 @@ class Session:
     def left(self):
         return self.deadline - time.time()
 
+    def reserve(self, seconds):
+        """Extend the deadline by `seconds` from now, or from the deadline if
+        that is still ahead: time set aside for one stage, which whatever ran
+        before it cannot eat into."""
+        self.deadline = max(self.deadline, time.time()) + seconds
+
     def close(self):
         try:
             self.engine.quit()
@@ -1115,7 +1299,7 @@ class Session:
         score = info.get("score")
         return score.pov(board.turn) if score is not None else None
 
-    def playout(self, board, plies=60, step=0.3):
+    def playout(self, board, plies=60, step=0.3, tablebase=None):
         """Play the position out against itself and watch the halfmove clock.
 
         This is what separates a fortress from a slow win, which the clock
@@ -1125,9 +1309,19 @@ class Session:
         engine -- but the burden here is one-sided. The engine has claimed a
         decisive advantage; sixty plies in which it cannot even reset the
         counter against itself is evidence against its own claim.
+
+        `tablebase` is `tablebase_query` or a stand-in for it. From a start
+        with eight men or more it is asked once, at the first position with
+        seven or fewer, and an answer ends the playout: from there the result
+        is exact, and in the chat behind 2.35.0 eight games were played on for
+        154 moves after it already was. From a start with seven or fewer the
+        run's own tablebase block has answered, and the playout only shows the
+        moves.
         """
         b = board.copy(stack=False)
-        first_reset, reset_san, evals = None, None, []
+        first_reset, reset_san, scores, moves = None, None, [], []
+        anchor, tb_problem, promoted = None, None, None
+        ask = tablebase is not None and chess.popcount(b.occupied) > 7
         # Why the loop stopped, because the reader is told what to conclude
         # from it. Until 2.27.0 a playout that ended on a claimable repetition
         # was reported as cut short by the budget -- on the fortress in
@@ -1139,6 +1333,24 @@ class Session:
             if b.is_game_over(claim_draw=True):
                 reason = "ended"
                 break
+            men = chess.popcount(b.occupied)
+            if ask and men <= 7:
+                ask = False                     # once: a refusal will not change
+                kind, data = tablebase(b.fen())
+                cat = data.get("category") if kind == "ok" else None
+                if cat and cat != "unknown":
+                    if b.turn != board.turn:    # categories are for the mover
+                        cat = TB_FLIP.get(cat, "unknown")
+                    anchor = {"ply": played, "men": men, "fen": b.fen(),
+                              "category": cat}
+                    reason = "tablebase"
+                    break
+                tb_problem = {"ply": played, "men": men,
+                              "why": (f"this sandbox's allowlist refuses "
+                                      f"{TABLEBASE_HOST}, {data}"
+                                      if kind == "blocked" else data
+                                      if kind == "failed"
+                                      else "no category in the answer")}
             if self.left() <= step + 0.5:
                 reason = "budget"
                 break
@@ -1155,23 +1367,28 @@ class Session:
             if move is None:
                 reason = "error"
                 break
-            if score is not None:
-                evals.append(score.pov(board.turn))
+            scores.append(score.pov(board.turn) if score is not None else None)
             san = b.san(move)
             b.push(move)
+            moves.append(move)
             played += 1
+            if move.promotion and promoted is None:
+                promoted = played
             if b.halfmove_clock == 0 and first_reset is None:
                 first_reset, reset_san = played, san
         outcome = b.outcome()
+        known = [s for s in scores if s is not None]
         return {
             "plies": played, "first_reset": first_reset, "reset_san": reset_san,
             "halfmove_clock": b.halfmove_clock,
             "over": outcome is not None,
             "claimable": outcome is None and b.can_claim_draw(),
             "result": b.result(claim_draw=True),
-            "first": evals[0] if evals else None,
-            "last": evals[-1] if evals else None,
+            "first": known[0] if known else None,
+            "last": known[-1] if known else None,
             "reason": reason,
+            "moves": moves, "scores": scores,
+            "anchor": anchor, "tb_problem": tb_problem, "promoted": promoted,
         }
 
     def probe_mate(self, board, rungs=5, step=0.3):
@@ -2018,31 +2235,34 @@ def run(args):
 
         # 4. Playout, only when asked. Thirty seconds is too much to spend on
         #    every position, and the question it answers -- fortress or slow
-        #    win -- only arises after the probe above has collapsed.
-        if args.playout > 0 and ses.left() > 2:
-            res = ses.playout(root, plies=args.playout, step=args.playout_step)
+        #    win -- only arises after the probe above has collapsed. Since
+        #    2.35.0 it is also how a conversion is shown move by move, and its
+        #    time is set aside on top of --budget (playout_reserve) instead of
+        #    being whatever the stages above left over.
+        reserve = 0.0
+        if args.playout > 0:
+            anchor_tb = (args.tablebase != "off"
+                         and chess.popcount(root.occupied) > 7)
+            reserve = playout_reserve(args.playout, args.playout_step,
+                                      anchor_tb)
+            ses.reserve(reserve)
+            res = ses.playout(root, plies=args.playout, step=args.playout_step,
+                              tablebase=tablebase_query if anchor_tb else None)
             tl.stage(t("st_playout", plies=res["plies"], step=args.playout_step))
-            print(t("playout_header", plies=res["plies"],
-                    step=args.playout_step))
-            for key in playout_notes(res, args.playout):
-                if key == "playout_reset":
-                    print(t(key, ply=res["first_reset"], san=res["reset_san"]))
-                elif key in ("playout_over", "playout_claimable"):
-                    print(t(key, ply=res["plies"], result=res["result"]))
-                else:
-                    print(t(key, plies=res["plies"], hm=res["halfmove_clock"],
-                            asked=args.playout))
-            if res["first"] is not None:
-                print(t("playout_evals", first=fmt(res["first"]),
-                        last=fmt(res["last"])))
+            for line in playout_report(res, args.playout, root,
+                                       args.playout_step, reserve, args.win):
+                print(line)
 
         if tb_final:
             print(tb_final)
 
         tl.stage(t("st_print"))
-        tl.finish(args.budget, show=args.timing)
+        tl.finish(args.budget + reserve, show=args.timing)
         if not args.timing:
-            print(t("t_short", dt=time.time() - ses.started, budget=args.budget))
+            dt = time.time() - ses.started
+            print(t("t_short_playout", dt=dt, budget=args.budget,
+                    reserve=reserve) if reserve
+                  else t("t_short", dt=dt, budget=args.budget))
         if ses.left() < 1:
             print(t("budget_warn"))
         # Last, because the end of the output is what gets read before the
@@ -2167,9 +2387,12 @@ def parse_args(argv):
                    help="how long the fifty-move probe searches")
     p.add_argument("--playout", type=int, default=0, metavar="PLIES",
                    help="play the position out against itself for this many "
-                        "plies and report the ply at which the halfmove clock "
-                        "first resets. This is what separates a fortress from "
-                        "a slow win; 60 plies costs about 20 s")
+                        "plies, print the moves and report the ply at which "
+                        "the halfmove clock first resets. This is what "
+                        "separates a fortress from a slow win; 60 plies costs "
+                        "about 20 s, set aside on top of --budget. From eight "
+                        "men or more it stops at the first position with seven "
+                        "or fewer that the tablebase answers")
     p.add_argument("--playout-step", type=float, default=0.3, metavar="SEC",
                    help="seconds a move during the playout")
     # `--board-style` is deliberately absent. It existed only to escape the

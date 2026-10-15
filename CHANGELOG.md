@@ -14,6 +14,72 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.35.0 — 2026-10-15
+
+Written from one claude.ai chat (2026-10-14/15, Opus 5.5) on
+`8/8/1pkp4/4p3/2P1P3/2KB2r1/7R/8 w` — a piece up, no forced win. The verdict
+was right first time; what followed "show how" was not, and the user had to
+correct the method again and again. The whole story is in
+`references/rationale.md`, "Technique: how, not whether".
+
+**`--playout` has its own time.** It used to get whatever the main search and
+the defences left of `--budget`, and `SKILL.md` said to raise `--budget` with
+it. In the chat `--playout 100 --playout-step 0.8 --budget 60` asked for 80 s
+of play inside a 60 s budget and stopped at ply 62. Now `playout_reserve()`
+sets aside plies × step × 1.25 + 5 s, plus the tablebase timeout when a query
+may be made, on top of `--budget` (`Session.reserve()`); the header and the
+closing time line say how much. The cut note no longer sends the reader to
+`--budget`, which would not help.
+
+**The playout prints its moves** — numbered, with the evaluation every ten
+plies — and the plies that reset the clock, with what was taken. Before, the
+answer could quote only the first reset and the last score, and had to tell a
+user who had asked to be shown the win that the moves were not available.
+
+**From eight men or more the playout stops at the first position the
+tablebase answers.** It asks once, at the first position with seven men or
+fewer; the answer is turned round to the side playing out and printed with a
+Lichess link to that position. A drawn answer from a decisive start says the
+self-play did not convert — not that the position is drawn — judged for the
+side the starting score favoured, so a fortress's side to move is not blamed.
+An anchor reached only after a promotion is flagged: it confirms the queen,
+not the conversion. A refused or failed query is reported and the playout goes
+on. From seven men or fewer nothing changes: the run's own tablebase block has
+answered, and the playout only shows the moves. In the chat, eight of nine
+games ran 154 moves past the point where the result was already exact.
+
+Measured locally (Windows, Stockfish 19): the chat's own command — the line to
+13…Rh6, `--playout 100 --playout-step 0.8 --budget 60` — now stops at ply 19,
+`for White the position is won`, 43 s in all, 111 s set aside.
+
+**`SKILL.md`: "When the question is how to win".** Four rules — the
+evaluation is not an argument for a plan; a long main line is not a plan, and
+a reordering inside noise is not a correction; name the defender's setups piece
+by piece; report each branch at the level its output proved — and a pointer to
+the new `references/technique.md`: listing setups, one run per branch with
+`--line` and `--playout`, what each way a playout ends licenses, when an
+alternative defence is worth playing out, and the structure of the write-up.
+
+**`SKILL.md` stays at 39 433 bytes** (2.34.1: 39 311). The new section is 918
+bytes; against it, the two browser tools for reading diagrams moved to
+`references/reading-diagrams.md`, the bullet against installing the
+recognizer runtime went (`setup.py` installs it only with `--recognizer`), and
+the re-probe note and the `view` paragraph were shortened. The frontmatter
+description is unchanged: with the addition the proposal wanted it would have
+been 1043 characters, past the specification's 1024.
+
+**Not in this release.** A `technique.py` — walking lines with MultiPV,
+playing branches out in parallel, holding a setup the user names — was
+proposed in a second claude.ai chat on 2026-10-15 and is deferred until a
+second position has been through the procedure by hand. So is the lower
+threshold it wanted for defender alternatives (0.025 in winning chances): the
+alternatives that mattered in the chat cleared the existing 0.05.
+
+**Tests.** `tests/test_ladder.py`, 22 new checks, no engine and no network:
+the reserve and that it outlives a spent budget, the anchor (asked once, turned
+round, the drawn and equal-start and fortress cases, the promotion flag), a
+refused query, no query from seven men, and the movetext and reset list.
+
 ## 2.34.1 — 2026-10-04
 
 **A second `setup.py` no longer wipes the timing journal.** `setup.py` is run

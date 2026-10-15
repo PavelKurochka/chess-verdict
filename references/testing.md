@@ -23,7 +23,7 @@ python3 scripts/epdcheck.py suite.epd --limit 20   # an external EPD suite
 python3 tests/test_stage.py                        # the timing journal, about 5 s
 python3 tests/test_compare.py                      # the board detector, about 3 s
 python3 tests/test_verdict.py                      # the verdict rule, instant
-python3 tests/test_ladder.py                       # what the ladder may claim, instant
+python3 tests/test_ladder.py                       # what the ladder and the playout may claim, instant
 python3 tests/test_reader.py                       # the recognizer, offline, about 5 s
 python3 tests/test_reader.py --sweep               # the 900-render held-out figure, about 1 min
 python3 tests/test_tablebase.py                    # the tablebase probe, offline, instant
@@ -94,6 +94,13 @@ machine's speed on the day rather than about the code — the test would go gree
 or red with the load average. The scripted engine also records which rungs it
 was asked, which is the only way to tell "asked and answered no" from "never
 asked" from outside.
+
+The same file covers the playout: why it stopped, the time set aside for it
+on top of `--budget` (2.35.0), and the tablebase stop at the first position
+with seven men or fewer — asked once, the category turned round to the side
+playing out, judged for the side the starting score favoured, and flagged when
+a promotion came first. A stand-in replaces `tablebase_query`, so none of it
+needs a network.
 
 `tests/test_tablebase.py` covers the tablebase probe added in 2.31.0 without a
 network: stand-ins for `urlopen` raise the errors a refused host and a bad day
