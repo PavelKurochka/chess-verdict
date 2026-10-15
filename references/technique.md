@@ -42,7 +42,7 @@ Choose it by the plan: the move that serves every setup. When the run's gap labe
 python3 scripts/stage.py "branch: king on c6-c7" -- python3 scripts/solve.py "<FEN>" --line "1.Rb2 Rh3 2.Rb5 Rg3 3.Rd5" --playout 100 --playout-step 0.5
 ```
 
-- `--line` reaches the branch point with every move checked. Where it leaves the defender to move, the best and second-best moves are the defender's two best tries, with the gap label between them. Where it leaves the attacker to move, the defences list (four by default, `--defences N` for more) is the defender's best replies — to the engine's best move, which is the plan's next move only if the engine agrees with the plan.
+- `--line` reaches the branch point with every move checked. Where it leaves the defender to move, the best and second-best moves are the defender's two best tries, with the gap label between them; the list after them is the attacker's replies, and the run says so (`<side> is winning, not <side>`). Where it leaves the attacker to move, the defences list (four by default, `--defences N` for more) is the defender's best replies — to the engine's best move, which is the plan's next move only if the engine agrees with the plan.
 - `--playout 100` plays the branch out, prints the moves and the clock resets, and stops at the first position with seven men or fewer that the tablebase answers. Its time is set aside on top of `--budget`, and the header says how much — 100 plies at 0.5 s is about a minute.
 - **Say how long it will take before starting.** Four to six branches is five to ten minutes. The chat's final pass — nine games, every one checked against the tablebase — took about sixteen.
 
@@ -65,7 +65,7 @@ Self-play is one engine against itself: it is evidence because the burden is one
 
 ## The defender's alternatives
 
-An alternative whose score is inside search noise — the scale `solve.py`'s gap label uses, about 0.05 in winning chances — is not a refutation of the move played, and not a new defence: usually it is the same setup in another order. Play an alternative out when it is a different *setup* — the king going the other way, a pawn given up — not merely a different move. In the chat the one setup no earlier answer had considered (the king to the kingside, giving up b6) scored 0.06 in winning chances better than the move played, just past the noise; the other alternatives the chat played out led to the same lost position by other roads.
+An alternative whose score is inside search noise — the scale `solve.py`'s gap label uses, about 0.05 in winning chances — is not a refutation of the move played, and not a new defence: usually it is the same setup in another order. The defences list uses the same scale: `No single toughest defence` means none of the replies it names may be called the most stubborn. Play an alternative out when it is a different *setup* — the king going the other way, a pawn given up — not merely a different move. In the chat the one setup no earlier answer had considered (the king to the kingside, giving up b6) scored 0.06 in winning chances better than the move played, just past the noise; the other alternatives the chat played out led to the same lost position by other roads.
 
 ## Writing it up
 

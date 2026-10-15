@@ -89,7 +89,7 @@ TABLEBASE_TIMEOUT = 6.0
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.35.1"
+VERSION = "2.35.2"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -458,17 +458,36 @@ TEXT = {
                   "exactly like that; only a mate or the end of the game "
                   "proves a win. If the 50-move probe below collapses, "
                   "--playout 60 decides.",
-    "v_forced_mates": "NOTE: {n} of the {total} replies are mated while the "
-                      "toughest ({san}) is scored in centipawns, so the "
+    "v_forced_mates": "NOTE: {n} of the {total} replies are mated while "
+                      "{others} {verb} scored in centipawns, so the "
                       "DISTANCE is not established -- the win is very likely a "
                       "mate. Re-ask with --mate-probe N --probe-step 3.",
     "def_header": "\nBest defences ({k} of {n}, depth {depth}, {dt:.1f} s) "
                   "-- evaluations from the attacker's point of view:",
+    "def_header_losing": "\n{winner}'s best replies ({k} of {n}, depth "
+                         "{depth}, {dt:.1f} s) -- {winner} is the side "
+                         "winning here, so these are not defences; "
+                         "evaluations from {loser}'s point of view:",
     "v_survives": "the advantage survives the best defence",
     "v_not_decisive": "the advantage is not decisive",
-    "v_tail": "Verdict: {verdict}. Toughest defence -- {san} ({score}). "
+    "v_tail": "Verdict: {verdict}. {label} -- {tough}. "
               "The remaining {n} {word} were rated no higher by the engine; "
               "for the full list use --scan full.",
+    "tough_label": "Toughest defence",
+    "tough_label_tie": "No single toughest defence",
+    "tough_noise": "{moves} are within search noise of each other ({dw:.2f} "
+                   "apart in chances), so the engine cannot rank them",
+    "tough_same_mate": "{moves} lead to mate at the same distance",
+    "v_losing": "Verdict: {winner} is winning, not {loser} -- the evaluation "
+                "is {score} from {loser}'s side, so {loser}'s best move only "
+                "defends and the replies listed are {winner}'s, not "
+                "defences. {label} -- {tough}.{rest} {loser}'s own tries are "
+                "compared in the best and second-best moves above, not in "
+                "this list.",
+    "strong_label": "{winner}'s strongest reply",
+    "strong_label_tie": "No single strongest reply for {winner}",
+    "v_losing_rest": " The remaining {n} {word} were rated no better for "
+                     "{winner}; for the full list use --scan full.",
     "r_draw": "draw", "r_mate": "mate", "r_mate_att": "mate against attacker",
     "r_unscored": "not scored",
     "t_header": "\nTime by stage:",
@@ -639,8 +658,94 @@ def headline_understates(best_score, n_mated, n_other):
     return (not best_score.is_mate() and n_mated >= 2 and n_mated > n_other)
 
 
+def losing(best_score, win_cp):
+    """The headline is decisive against the side to move.
 
-def enumeration_verdict(best_score, rows, win):
+    `--line` often stops with the defender to move -- `references/technique.md`
+    asks for exactly that, to see the defender's two best tries -- and then the
+    best move is a defence and every reply after it belongs to the side that is
+    winning. Until 2.35.2 the reply block took the side to move for the
+    attacker regardless: after `8/8/2b2kp1/p6p/P6P/3K2P1/8/4R3 w` and
+    1.Rf1+ ... 7.Ke7, Black to move at -40, it printed "the advantage is not
+    decisive. Toughest defence -- Rxa4", and Rxa4 was White's winning reply.
+    """
+    return decisive(-best_score, win_cp)
+
+
+def toughest(replies):
+    """The replies within search noise of the lowest-scored one, lowest first.
+
+    `replies` are ``(san, score)`` from the point of view of the side that
+    played the best move, so the lowest is the reply that does it most harm.
+    Until 2.35.2 that one alone was printed as *the* toughest defence, and on
+    `8/8/2b2kp1/p6p/P6P/3K2P1/8/4R3 w` after 1.Rf1+ Ke5 the answer called
+    2...Kd5 the most stubborn defence by evaluation, at +4.94 beside 2...Bd5
+    at +5.33 -- 0.03 apart in chances, under the GAP_CHANCES the second-move
+    label already calls noise. The same scale applies here. Mates are compared
+    by distance alone: every mate is 1.0 in chances, and a longer one is
+    tougher for certain, not by a margin of noise.
+    """
+    low = min(score for _, score in replies)
+    if low.is_mate():
+        group = [r for r in replies if r[1] == low]
+    else:
+        group = [r for r in replies if not r[1].is_mate()
+                 and chances(r[1]) - chances(low) < GAP_CHANCES]
+    return sorted(group, key=lambda r: r[1])
+
+
+def tough_words(group):
+    """A group from toughest() as the verdict line names it."""
+    moves = ", ".join(f"{san} ({fmt(score)})" for san, score in group)
+    if len(group) == 1:
+        return moves
+    if group[0][1].is_mate():
+        return t("tough_same_mate", moves=moves)
+    return t("tough_noise", moves=moves,
+             dw=chances(group[-1][1]) - chances(group[0][1]))
+
+
+def losing_verdict(best_score, replies, mover, rest=None):
+    """The verdict line when the side to move is the one losing.
+
+    `rest` is how many replies a sample left out; None for a full list.
+    """
+    winner = t("black") if mover == chess.WHITE else t("white")
+    loser = t("white") if mover == chess.WHITE else t("black")
+    group = toughest(replies)
+    tail = "" if rest is None else t("v_losing_rest", n=rest,
+                                     word=word_replies(rest), winner=winner)
+    return ("v_losing", dict(
+        winner=winner, loser=loser, score=fmt(best_score),
+        label=t("strong_label_tie" if len(group) > 1 else "strong_label",
+                winner=winner),
+        tough=tough_words(group), rest=tail))
+
+
+def sampled_verdict(best_score, replies, win, rest, mover):
+    """Which verdict lines the top-N sample of replies earns.
+
+    `replies` are ``(san, score)`` from the point of view of `mover`, the side
+    that played the best move; `rest` is how many replies the sample left out.
+    Returns ``[(text_key, fields), ...]``. Pure, like enumeration_verdict(),
+    so the tests call the rule rather than a copy of it.
+    """
+    if losing(best_score, win):
+        return [losing_verdict(best_score, replies, mover, rest)]
+    group = toughest(replies)
+    verdict = (t("v_survives") if decisive(group[0][1], win)
+               else t("v_not_decisive"))
+    out = [("v_tail", dict(
+        verdict=verdict,
+        label=t("tough_label_tie" if len(group) > 1 else "tough_label"),
+        tough=tough_words(group), n=rest, word=word_replies(rest)))]
+    mated = winning_mates([score for _, score in replies])
+    if headline_understates(best_score, len(mated), len(replies) - len(mated)):
+        out.append(("v_tail_mates", {}))
+    return out
+
+
+def enumeration_verdict(best_score, rows, win, mover=chess.WHITE):
     """Which verdict lines a full enumeration of replies earns.
 
     `rows` are ``(san, score, line, note)`` with scores from the attacker's
@@ -657,8 +762,21 @@ def enumeration_verdict(best_score, rows, win):
     forced only when every reply is mated or ends the game, or when the
     headline itself is a mate; a list that is merely decisive in centipawns
     says so and says it is not a proof.
+
+    Since 2.35.2 a side to move that is losing gets its own line, as on the
+    sampled path (see losing()): every rule below reads the list as defences
+    against the side to move, and there it was the winner's moves -- "these
+    replies hold" named the winning side's best moves. The NOTE on mated
+    replies no longer names one reply as the toughest either; it lists the
+    ones scored in centipawns, which are what leaves the distance open.
     """
     unscored = [r for r in rows if r[3] == t("r_unscored")]
+    if losing(best_score, win):
+        out = [("v_incomplete", dict(n=len(unscored)))] if unscored else []
+        scored = [(r[0], r[1]) for r in rows if r[3] != t("r_unscored")]
+        if scored:
+            out.append(losing_verdict(best_score, scored, mover))
+        return out
     if unscored:
         return [("v_incomplete", dict(n=len(unscored)))]
     holds = [r for r in rows if not decisive(r[1], win)]
@@ -674,14 +792,16 @@ def enumeration_verdict(best_score, rows, win):
         best_score is chess.engine.MateGiven or best_score.mate() > 0)
     if not unproved or headline_mates:
         return [("v_forced", dict(n=len(rows)))]
-    toughest = min(rows, key=lambda r: r[1])
+    floor = min(r[1] for r in rows)
     out = [("v_decisive", dict(n=len(rows), k=len(unproved),
-                               floor=fmt(toughest[1])))]
-    # Most replies mated, the toughest in centipawns: the distance is the
-    # open question, and very likely the win is a mate.
+                               floor=fmt(floor)))]
+    # Most replies mated, the rest in centipawns: the distance is the open
+    # question, and very likely the win is a mate.
     if headline_understates(best_score, len(mated), len(unproved)):
-        out.append(("v_forced_mates", dict(n=len(mated), total=len(rows),
-                                           san=toughest[0])))
+        out.append(("v_forced_mates", dict(
+            n=len(mated), total=len(rows),
+            others=", ".join(r[0] for r in unproved[:6]),
+            verb="is" if len(unproved) == 1 else "are")))
     return out
 
 
@@ -2147,7 +2267,8 @@ def run(args):
                     print(f"  {san:7} {fmt(score):>15} [{note}] {line}")
                 # What the list proves is decided in one pure function, so the
                 # tests exercise the rule itself; see enumeration_verdict().
-                verdict = enumeration_verdict(best_score, rows, args.win)
+                verdict = enumeration_verdict(best_score, rows, args.win,
+                                              mover=side)
                 for key, fields in verdict:
                     print(t(key, **fields))
                 # The fifty-move probe below must know whether it faces a
@@ -2160,26 +2281,27 @@ def run(args):
                     hard=args.defence_time * 2, min_depth=args.reply_depth,
                     max_depth=args.depth, stable=args.stable, nodes=args.nodes)
                 tl.stage(t("st_defences", k=k, n=replies, depth=dd))
-                print(t("def_header", k=k, n=replies, depth=dd, dt=ddt))
+                # With the losing side to move, the replies are the winner's
+                # and the header says so before the list, not after it.
+                print(t("def_header_losing" if losing(best_score, args.win)
+                        else "def_header", k=k, n=replies, depth=dd, dt=ddt,
+                        winner=t("white") if board.turn == chess.WHITE
+                        else t("black"),
+                        loser=t("white") if side == chess.WHITE
+                        else t("black")))
                 got = [dl[i] for i in sorted(dl) if dl[i].pv]
                 for ln in got:
                     print(f"  {board.san(ln.pv[0]):7} "
                           f"{fmt(ln.score.pov(side)):>15} "
                           f"{board.variation_san(ln.pv[:args.pv_plies])}")
                 if got:
-                    hardest = min(got, key=lambda l: l.score.pov(side))
-                    verdict = (t("v_survives")
-                               if decisive(hardest.score.pov(side), args.win)
-                               else t("v_not_decisive"))
-                    rest = replies - k
-                    print(t("v_tail", verdict=verdict,
-                            san=board.san(hardest.pv[0]),
-                            score=fmt(hardest.score.pov(side)),
-                            n=rest, word=word_replies(rest)))
-                    mated = winning_mates([ln.score.pov(side) for ln in got])
-                    if headline_understates(best_score, len(mated),
-                                            len(got) - len(mated)):
-                        print(t("v_tail_mates"))
+                    # What the sample shows is decided in one pure function,
+                    # as for the full list; see sampled_verdict().
+                    seen = [(board.san(ln.pv[0]), ln.score.pov(side))
+                            for ln in got]
+                    for key, fields in sampled_verdict(
+                            best_score, seen, args.win, replies - k, side):
+                        print(t(key, **fields))
 
         # 3. The fifty-move probe. Runs last, because it wipes the hash table
         #    that everything above depends on. Automatic where the failure it

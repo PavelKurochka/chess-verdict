@@ -74,8 +74,9 @@ n6N/pr4p1/2ppp1Bk/P4p1P/r5PK/p6R/2PPP2N/8 w - - 0 1        ; known miss, mate in
 
 ## What each test file is for
 
-`tests/test_verdict.py` feeds constructed reply tables to `headline_understates()`
-and `winning_mates()` rather than running a search, so no result depends on the
+`tests/test_verdict.py` feeds constructed reply tables to `headline_understates()`,
+`winning_mates()`, `enumeration_verdict()` and, since 2.35.2, `sampled_verdict()`,
+`losing()` and `toughest()` rather than running a search, so no result depends on the
 depth the engine happened to reach. That is the point: the rule it covers is
 about *reporting* what the search found, and a test that had to search first
 could be turned green by a lucky run on a position the rule gets wrong.

@@ -14,6 +14,46 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.35.2 — 2026-10-15
+
+Two faults in the reply block of `solve.py`, both found in the live test of
+2.35.1 (claude.ai, Opus 5.5, `8/8/2b2kp1/p6p/P6P/3K2P1/8/4R3 w`, the exchange
+up). Both were in the script's output, not in the procedure of
+`references/technique.md`; the answer got past the first and repeated the
+second. Fixed on the sampled path and on `--scan full`.
+
+**The side to move was always taken for the attacker.** After `--line "1.Rf1+
+Ke7 2.Rf4 Kd8 3.Rc4 Kc7 4.Kd4 Kb6 5.Ke5 Be8 6.Kf6 Ka6 7.Ke7"`, Black to move
+at −40, the block printed "the advantage is not decisive. Toughest defence --
+Rxa4 (−36.35)": Rxa4 was White's winning reply, and the advantage was decisive,
+only for the other side. With `--scan full` the same position read "the win is
+not forced; these replies hold:" over White's best moves. `technique.md` asks
+for lines that end on the defender's move, so this is the ordinary case, not a
+corner. Now, when the headline is decisive against the side to move (`losing()`,
+the mirror of `--win`), the header reads "White's best replies … White is the
+side winning here, so these are not defences", and the verdict names the winner,
+the strongest reply, and where the defender's own tries are: the best and
+second-best moves above.
+
+**One reply was called the toughest when the engine cannot tell.** After
+`1.Rf1+ Ke5` the list had Kd5 +4.94 and Bd5 +5.33, 0.03 apart in winning
+chances, and the answer called Kd5 the most stubborn defence by evaluation. The
+block now applies the scale the second-move label already uses, `GAP_CHANCES`
+(0.05): replies that close to the lowest are listed together as "No single
+toughest defence -- … within search noise of each other". Mates are compared by
+distance only, and a mate is never noise beside a centipawn score. On
+`--scan full` the NOTE on mated replies no longer names one centipawn reply as
+the toughest; it lists all of them, since together they leave the distance open.
+
+The sampled verdict is now a pure function, `sampled_verdict()`, beside
+`enumeration_verdict()`; `tests/test_verdict.py` covers both cases on both
+paths with constructed tables (24 new checks, 43 in all). `references/technique.md` says
+what the list is when the defender is to move and what "No single toughest
+defence" means. `SKILL.md` changed only in its version.
+
+Not changed: a side to move that is worse short of `--win` still reads "the
+advantage is not decisive. Toughest defence -- …" over the opponent's replies.
+
 ## 2.35.1 — 2026-10-15
 
 Two sentences in `SKILL.md` contradicted the section 2.35.0 added, "When the
