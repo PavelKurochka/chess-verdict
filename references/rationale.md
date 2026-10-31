@@ -17,6 +17,7 @@ Read the section a rule points to, not the whole file: `grep -n '^##'` lists the
 headings with their line numbers.
 
 - [Where the engine is the weak link](#where-the-engine-is-the-weak-link) — fortresses, decided endgames, the halfmove clock; [the 50-move probe](#the-50-move-probe)
+- [Finding the engine](#finding-the-engine) — STOCKFISH, the PATH, the container default; why setup does not drive winget
 - [Reading the files of this skill](#reading-the-files-of-this-skill) — `view` once, `bash` for the rest
 - [The recognizer](#the-recognizer) — the model, its confidence floor, the shifted-board fix
 - [Never type a FEN for a position further down a line](#never-type-a-fen-for-a-position-further-down-a-line)
@@ -103,6 +104,36 @@ fortress, or a win long enough that the fifty-move rule decides it* four lines
 apart in one output, and believed the collapsed probe. The position was a win of
 about thirty moves. The script now prints a different note in that case, so the
 conflict does not reach the reader as two contradictory lines.
+
+## Finding the engine
+
+**2.36.0.** Until then both `solve.py` and `setup.py` resolved Stockfish to a
+single path: `os.environ.get("STOCKFISH", "/usr/games/stockfish")`. That
+assumed the claude.ai container, where apt puts the engine in `/usr/games` --
+a directory that is not always on the agent's `PATH`, which is why the path
+was hard-coded rather than found. Anywhere else the run failed at startup
+with "STOCKFISH NOT FOUND" while a perfectly good engine sat on the `PATH`:
+apt on generic Linux, Homebrew on macOS, WinGet on Windows all put `stockfish`
+where `shutil.which` can see it.
+
+The order now is: `STOCKFISH` from the environment, then the `PATH`, then
+`/usr/games/stockfish` last. The environment stays first even when it names a
+file that is not there -- an explicit setting that is wrong has to be
+reported as the setting it is, not silently replaced by whatever else the
+search turned up; a stale `STOCKFISH` produced the "says=unreachable"
+confusions once already. The container default stays in the list as the last
+resort so the claude.ai container behaves exactly as before: the change adds
+fallbacks behind the old behaviour, it does not replace it. The helper is
+duplicated in `setup.py` rather than imported, because `setup.py` runs before
+python-chess exists and `solve.py` imports python-chess at the top.
+
+`setup.py` drives `apt-get` when it finds it and nothing else. On Windows
+`winget install` was considered and rejected: it can stop on a UAC prompt,
+and an unattended run would hang on a dialog nobody can answer -- a failed
+step that prints the exact command (`winget install --id Stockfish.Stockfish
+…`) is worse only in appearance. The rasteriser step outside apt is dropped
+rather than failed: the diagram degrades to SVG inside `solve.py` and
+`compare.py` already, and the `Ready` line names the degradation.
 
 ## Reading the files of this skill
 
@@ -356,6 +387,26 @@ previously required a reply that holds and so could never fire in the case it
 was written for — a position where *every* reply loses and only the toughest one
 is unresolved. That case gets its own, weaker line: the win is forced and only
 the distance is open.
+
+**How far a centipawn score moves with time (2026-10-27).** The 200 positions of
+`arasan2026.epd` (Jon Dart's tactical suite, from games; not in this repository —
+it carries a copyright notice and no licence), each searched for 2 s and again
+for 16 s on Stockfish 19, one thread, 64 MB, fresh game per search, scores from
+the mover's side. The score moves by a median 0.79 pawns (80% within 1.58, 90%
+within 2.15, largest 9.84); 77 positions move by a pawn or more. The best move
+changes in 26 of 200, and the class (win from +3, edge +1 to +3, level, worse)
+in 47. The shift is almost all upward: 31 edge→win and 4 level→win, against one
+level→worse and one edge→level. None of the 88 positions at +3 or more on 2 s
+fell below +1 on 16 s. The suite's own key was found in 152 of 197 on 2 s and 171
+of 197 on 16 s; mean depth 20.2 against 27.2.
+
+So the sign of a decisive score is reliable and its size is not, which is what
+"an evaluation, not a proof" says. Two limits: one run, with time rather than
+nodes as the limit, and positions picked because they are hard, so the upward
+drift is larger than on quiet positions (an earlier 2 s against 16 s check for
+the 0.025 threshold below, in winning chances rather than pawns, gave a median
+of 0.019). That threshold is about the gap between replies at one depth and is
+not touched by this.
 
 ## Technique: how, not whether
 

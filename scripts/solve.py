@@ -68,7 +68,24 @@ except ImportError as exc:
              "as source only, and without it some images fail to build it. "
              "Nothing was analysed.".format(exc=exc))
 
-ENGINE_PATH = os.environ.get("STOCKFISH", "/usr/games/stockfish")
+def find_engine():
+    """Where Stockfish lives, in the order the search looks for it.
+
+    An explicit STOCKFISH wins even when it names a file that is not there --
+    a stale value has to be reported as the setting it is, not silently
+    replaced by whatever else was found. Next the PATH, which covers apt on
+    generic Linux, Homebrew on macOS and WinGet on Windows. The container
+    default comes last: apt puts stockfish in /usr/games, which is not always
+    on the agent's PATH. The same order lives in setup.py -- it cannot import
+    this module, python-chess may not be installed yet.
+    """
+    from_env = os.environ.get("STOCKFISH")
+    if from_env:
+        return from_env
+    return shutil.which("stockfish") or "/usr/games/stockfish"
+
+
+ENGINE_PATH = find_engine()
 GAME_KEY = "chess-verdict"  # shared key: no ucinewgame, the hash survives
 # Centipawns at which a score with no mate triggers a direct mate query (issue
 # #3). The misses it was written for sat at +62 to +92; +20 leaves room while
@@ -89,7 +106,7 @@ TABLEBASE_TIMEOUT = 6.0
 #: the top entry of CHANGELOG.md. A fixed build that never reached the installed
 #: copy is how this skill lost a mate-detection fix once already, with nothing in
 #: the output to show for it.
-VERSION = "2.35.2"
+VERSION = "2.36.0"
 
 
 def banner(parser, args, tool, subject=None, pinned=(), skip=(),
@@ -409,7 +426,9 @@ TEXT = {
                        "castling field was filled in as '-'. That is an "
                        "assumption, not a reading: where castling is the "
                        "solution it is the whole answer.",
-    "no_engine": "STOCKFISH NOT FOUND at {path} ({why}). Run "
+    "no_engine": "STOCKFISH NOT FOUND at {path} ({why}). The search tried, in "
+                 "order: the STOCKFISH environment variable, stockfish on the "
+                 "PATH, and the container default /usr/games/stockfish. Run "
                  "scripts/setup.py, which says why it failed, or point "
                  "the STOCKFISH environment variable at the binary. Nothing "
                  "was analysed; "

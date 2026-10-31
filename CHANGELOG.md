@@ -14,6 +14,68 @@ same idea being re-derived from scratch in six months.
 
 ---
 
+## 2.36.0 — 2026-10-31
+
+The skill stops assuming the claude.ai container and runs wherever the agent
+runs: ZCode on Windows was the case that forced the change, but nothing in it
+is Windows-specific. The container keeps working exactly as before -- every
+portability measure is a fallback *behind* the old behaviour, never instead
+of it.
+
+**The engine is looked for, not assumed.** `solve.py` and `setup.py` both
+resolved Stockfish to one path, `/usr/games/stockfish` (the container's apt
+location) unless `STOCKFISH` was set; anywhere else a run died with "STOCKFISH
+NOT FOUND" while the engine sat on the PATH. Both now share one
+`find_engine()`: an explicit `STOCKFISH` first -- a stale value is reported
+as the setting it is, not silently replaced -- then `stockfish` on the `PATH`
+(apt on generic Linux, Homebrew on macOS, WinGet on Windows), then the
+container path last. The duplicated helper is deliberate: `setup.py` cannot
+import `solve.py`, which needs python-chess before setup has installed it.
+The `no_engine` message names the three places the search tried.
+
+**`setup.py` adapts to the package managers it finds.** With `apt-get` it
+runs the same steps as before. Without one it no longer tries at all: the
+engine step fails and prints the command to run by hand (`winget install --id
+Stockfish.Stockfish …` on Windows, `brew install stockfish` on macOS), and
+the rasteriser step is dropped -- `solve.py` and `compare.py` degrade to SVG
+diagrams on their own, and the `Ready` line says so. Driving `winget` from
+here was considered and rejected: it can stop on a UAC prompt no unattended
+run can answer, and a hung setup is worse than a failed one with the command
+on screen. The pip steps never needed changing (`--break-system-packages` is
+a no-op on non-Debian pip). On Windows the launcher is `py -3`, not `python3`
+-- bare `py` trips over the scripts' `#!/usr/bin/env python3` shebang.
+
+**The timing journal's default path was POSIX-only.** `stage.py` wrote its
+journal to a literal `/tmp/chess-verdict-timeline.tsv`; on this Windows machine
+there is no `C:\tmp`, so the first journal write would have failed before any
+analysis started. The default is now the platform's temp directory
+(`tempfile.gettempdir()`), which on the container is the same `/tmp` as before.
+The tests never caught it because every one of them sets `CHESS_TIMELINE` --
+the live run on ZCode is what found it, which is what live runs are for.
+
+**Words that assumed Claude.** `SKILL.md` no longer explains "send the file"
+through `/mnt/user-data/outputs`, and says the tablebase allowlist is a
+claude.ai-sandbox setting rather than a universal one. The README install
+section names a skills folder per agent (`~/.claude/skills/` for Claude Code,
+`~/.zcode/skills/` for ZCode), the release notes tell the reader to install
+into *their* agent, and the "assumes a Linux environment" limitation is gone
+-- it is no longer true. `CLAUDE.md`, the local notes file, became
+`AGENTS.md` (untracked either way; the archive check in `release.yml` watches
+for both names).
+
+Honest caveats: the container itself was not re-run live -- it is not
+reachable from here, and the `/usr/games/stockfish` branch is covered by the
+resolver unit tests instead. Measured on Windows 10, Python 3.12, Stockfish
+19 via WinGet: full selftest 25/25 (twice -- with `STOCKFISH` set and with it
+unset, the latter exercising the new PATH lookup), every `tests/test_*.py`
+green; `test_setup.py` grew the resolver-order checks and a test that the
+no-apt path prints the hand-install command. And one full live run of the
+skill's flow on ZCode, following `SKILL.md` step by step (setup, the command
+wrapped in `stage.py`, solve, the diagram checked square by square, `--stop`):
+the regression position `5k2/4pp2/5bp1/4q2p/3N4/2p1nQ1P/P1P5/K3R3 b` answered
+Nxc2+, mate in 4, verdict "the win is forced, every reply loses (2)", exactly
+the expectation recorded for it in `tests/positions.tsv`.
+
 ## 2.35.2 — 2026-10-15
 
 Two faults in the reply block of `solve.py`, both found in the live test of

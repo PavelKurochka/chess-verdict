@@ -3,7 +3,8 @@
 *A position in, a verdict out: the move, the line behind it, and how far it was actually proved.*
 
 An [Agent Skill](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
-that analyses a chess position with Stockfish. A diagram image or a FEN goes in;
+— the skill format used by Claude and other AI agents — that analyses a chess
+position with Stockfish. A diagram image or a FEN goes in;
 what comes back has been checked twice — once for whether the board was read
 correctly, once by the engine — and states its own strength. A forced mate is
 called a forced mate; an advantage that merely survives the defender's best try
@@ -44,9 +45,10 @@ only wants to show the assistant a position and read the answer, start with
 
 ## Install
 
-Drop the directory into your skills folder — `~/.claude/skills/chess-verdict`
-for Claude Code, or upload the archive in the Claude app under
-**Customize → Skills**. Use Opus or Sonnet, not Haiku ([Which model](#which-model)).
+Drop the directory into your agent's skills folder — `~/.claude/skills/chess-verdict`
+for Claude Code, `~/.zcode/skills/chess-verdict` for ZCode — or upload the
+archive in the Claude app under **Customize → Skills**. In the app use Opus or
+Sonnet, not Haiku ([Which model](#which-model)).
 
 The skill installs its own dependencies on first use, with one command:
 
@@ -56,12 +58,14 @@ python3 scripts/setup.py --image        # + Pillow and NumPy for the comparison 
 python3 scripts/setup.py --recognizer   # + onnxruntime for img2fen.py
 ```
 
-It runs `apt-get update`, `apt-get install stockfish librsvg2-bin` and
-`pip install chess --use-pep517` as needed, skips anything already installed,
+On a system with `apt-get` it runs `apt-get update`, `apt-get install stockfish
+librsvg2-bin` and `pip install chess --use-pep517` as needed; elsewhere it
+installs through pip only and prints the command that installs Stockfish by
+hand (winget on Windows, brew on macOS). It skips anything already installed,
 prints one line per step, and ends `Ready` or `NOT READY` (exit status 1 when the
 engine or python-chess is missing). About twenty seconds the first time. It
-also starts the timing journal. The engine path can be overridden with
-`$STOCKFISH`; it defaults to `/usr/games/stockfish`.
+also starts the timing journal. The engine is looked for first at `$STOCKFISH`,
+then on the `PATH`, then at the container default `/usr/games/stockfish`.
 
 The rasteriser (`librsvg2-bin`) turns the diagram into a PNG, the form an
 assistant reading the output can actually open and check. `pip install
@@ -95,8 +99,8 @@ Without the setting nothing breaks. The run says the host was refused and names
 the setting, gives the engine's evaluation as before, and prints the tablebase
 URL for you to open in a browser. A timeout or a rate limit from Lichess is
 reported as such and does not send you to the settings. `--tablebase off`
-skips the query altogether. In Claude Code on your own machine there is no
-allowlist and the query simply works.
+skips the query altogether. On your own machine — Claude Code, ZCode, any agent
+running locally — there is no allowlist and the query simply works.
 
 ---
 
@@ -115,7 +119,7 @@ Halfmove clock: 0 of 100. The fifty-move counter is assumed to have just reset -
 Board to verify: https://lichess.org/analysis/Rb3rk1/6pp/8/2Q5/6b1/8/1q3PPP/4R1K1_w_-_-_0_1
 
 Position as read, rendered from White's side -- open this diagram, compare it against the original, and show it to the user before trusting the answer:
-  /mnt/user-data/outputs/board.png
+  board.png
 Material: White Qx1 Rx2 Px3 -- Black Qx1 Rx1 Bx2 Px2
 
 Best move: Qc4+   evaluation +3.74   (depth 17, 0.4 s)
@@ -400,7 +404,10 @@ Three of these are the engine's, not the pipeline's, and no flag reaches them.
   cleanly parsing FEN. Nothing in the string can catch it, so the skill reads
   every diagram twice in different traversal orders and compares. That is a
   discipline, not a guarantee.
-- The scripts assume a Linux environment with `apt` and `pip`.
+- The scripts are plain Python, and `setup.py` adapts to the package managers
+  it finds — `apt` on the claude.ai container and Debian/Ubuntu, pip everywhere;
+  where none applies it prints what to install by hand instead of hanging on a
+  prompt (winget can stop on a UAC dialog no unattended run can answer).
 
 ---
 

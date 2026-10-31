@@ -46,9 +46,9 @@ jobs:
       - name: Build chess-verdict.zip
         run: |
           # The Agent Skills spec wants the archive to hold a folder named after
-          # the skill. git archive takes exactly the committed tree (no CLAUDE.md,
-          # nothing .gitignore excludes) and keeps the executable bits; .github is
-          # repository plumbing, not part of the skill.
+          # the skill. git archive takes exactly the committed tree (no CLAUDE.md
+          # or AGENTS.md, nothing .gitignore excludes) and keeps the executable
+          # bits; .github is repository plumbing, not part of the skill.
           mkdir build
           git archive --format=tar --prefix=chess-verdict/ HEAD -- . ':(exclude).github' \
             | tar -x -C build
@@ -60,7 +60,7 @@ jobs:
           fail() { echo "::error::$1"; exit 1; }
           grep -q ' chess-verdict/SKILL.md$' listing.txt || fail "no chess-verdict/SKILL.md"
           grep -q ' chess-verdict/.gitignore$' listing.txt || fail "no chess-verdict/.gitignore"
-          if grep -qE ' chess-verdict/(\.github|CLAUDE\.md)' listing.txt; then
+          if grep -qE ' chess-verdict/(\.github|CLAUDE\.md|AGENTS\.md)' listing.txt; then
             fail "repository-only files got into the archive"
           fi
           # every script with a shebang must stay executable
@@ -88,8 +88,11 @@ jobs:
             echo "release $TAG exists; keeping its notes"
           else
             cat > notes.md <<'EOF'
-          Download `chess-verdict.zip` below and upload it to Claude as a skill. The archive
-          holds a `chess-verdict/` folder, as the Agent Skills spec requires; GitHub's
+          Download `chess-verdict.zip` below and install it into your agent as a skill:
+          unpack the archive into the agent's skills directory (in Claude Code,
+          `~/.claude/skills/`; in ZCode, `~/.zcode/skills/`), or upload it in the
+          Claude app under Customize → Skills. The archive holds a `chess-verdict/`
+          folder, as the Agent Skills spec requires; GitHub's
           automatic "Source code" archives are named after the tag and will not load as they are.
 
           EOF

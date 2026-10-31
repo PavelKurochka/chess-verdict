@@ -12,7 +12,7 @@ assistant, not for you.
 
 ## What it is
 
-`chess-verdict` gives Claude a chess engine — Stockfish, the same one behind the
+`chess-verdict` gives your AI assistant a chess engine — Stockfish, the same one behind the
 analysis board on Lichess — plus a set of rules about how to use it and what it
 is allowed to claim afterwards.
 
@@ -34,7 +34,9 @@ actually established.
 
 ## How to use it
 
-In the Claude app: **Customize → Skills**, upload `chess-verdict.zip`. After
+In the Claude app: **Customize → Skills**, upload `chess-verdict.zip`. In a
+desktop coding agent (Claude Code, ZCode) the unpacked `chess-verdict/` folder
+goes into its skills directory instead. After
 that it turns itself on when a position comes up. You do not have to mention it,
 and you do not have to say the words "Stockfish", "engine" or "FEN".
 

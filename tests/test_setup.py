@@ -49,7 +49,7 @@ sys.path.insert(0, SCRIPTS)
 
 import setup  # noqa: E402
 
-ENGINE = os.environ.get("STOCKFISH", "/usr/games/stockfish")
+ENGINE = setup.find_engine()
 FEN = "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"    # back-rank mate in one
 
 failures = []
@@ -86,6 +86,61 @@ def test_unknown_option():
     check("a misspelt option is refused, not ignored", code == 2, f"exit {code}")
 
 
+def test_engine_resolution():
+    """env var > PATH > /usr/games/stockfish, the container's apt location."""
+    saved_env, saved_which = os.environ.get("STOCKFISH"), shutil.which
+    try:
+        os.environ["STOCKFISH"] = "/tmp/declared-but-missing"
+        check("an explicit STOCKFISH wins even when the file is missing",
+              setup.find_engine() == "/tmp/declared-but-missing")
+        del os.environ["STOCKFISH"]
+        shutil.which = lambda name: None
+        check("... and the container default is the last resort",
+              setup.find_engine() == "/usr/games/stockfish",
+              setup.find_engine())
+        shutil.which = lambda name: "/mocked/PATH/stockfish" \
+            if name == "stockfish" else None
+        check("the PATH is searched before the container default",
+              setup.find_engine() == "/mocked/PATH/stockfish")
+    finally:
+        shutil.which = saved_which
+        if saved_env is None:
+            os.environ.pop("STOCKFISH", None)
+        else:
+            os.environ["STOCKFISH"] = saved_env
+
+
+def test_no_apt_hint():
+    """Outside apt a missing engine fails with the command to run by hand."""
+    import contextlib
+    import io
+    if setup.APT:
+        print("skip  engine hint: apt-get is on this machine")
+        return
+    import stage
+    saved = stage.JOURNAL, stage.MARKS, setup.APT, setup.ENGINE_PATH
+    with tempfile.TemporaryDirectory() as tmp:
+        stage.JOURNAL = os.path.join(tmp, "tl.tsv")
+        stage.MARKS = stage.JOURNAL + ".mark"
+        setup.APT = None
+        setup.ENGINE_PATH = os.path.join(tmp, "no-such-engine")
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = setup.main([])
+        finally:
+            stage.JOURNAL, stage.MARKS = saved[:2]
+            setup.APT, setup.ENGINE_PATH = saved[2:]
+    out = buf.getvalue()
+    check("no apt, no engine: exit 1 and NOT READY",
+          code == 1 and "NOT READY" in out, f"exit {code}")
+    check("... the step says what to run by hand",
+          "by hand" in out and ("winget install" in out or
+                                "brew install" in out or
+                                "stockfishchess.org" in out),
+          out.strip().splitlines()[-3] if out.strip() else "")
+
+
 def test_all_present():
     if not (setup.have_engine() and setup.have_module("chess")
             and setup.have_rasteriser()):
@@ -98,10 +153,13 @@ def test_all_present():
             rows = f.read()
     check("nothing to install: exit 0 and Ready", code == 0 and "Ready:" in out,
           f"exit {code}")
-    check("... every step skipped, no apt-get update",
-          out.count("skip  ") == 3 and "update package lists" not in out)
-    check("... and the journal is started with a row per step",
-          rows.startswith("#start") and rows.count("already installed") == 3)
+    check("... every step skipped, nothing ran, no apt-get update",
+          "ok    " not in out and "FAIL  " not in out
+          and "update package lists" not in out)
+    check("... and the journal is started with a row per skipped step",
+          rows.startswith("#start")
+          and rows.count("already installed") == out.count("skip  ")
+          and "exit code" not in rows)
 
 
 def stub_apt(tmp):
@@ -254,8 +312,9 @@ def test_rerun_keeps_the_journal():
             stage.JOURNAL, stage.MARKS = saved
 
 
-for fn in (test_refused_hosts, test_unknown_option, test_all_present,
-           test_rerun_keeps_the_journal, test_engine_fails, test_handoff_is_last, test_source_builds_the_sheet,
+for fn in (test_refused_hosts, test_unknown_option, test_engine_resolution,
+           test_no_apt_hint, test_all_present, test_rerun_keeps_the_journal,
+           test_engine_fails, test_handoff_is_last, test_source_builds_the_sheet,
            test_img2fen_asks_for_a_second_reading):
     fn()
 

@@ -77,9 +77,15 @@ Journal file: $CHESS_TIMELINE or /tmp/chess-verdict-timeline.tsv.
 import os
 import subprocess
 import sys
+import tempfile
 import time
 
-JOURNAL = os.environ.get("CHESS_TIMELINE", "/tmp/chess-verdict-timeline.tsv")
+# The journal is a scratch file: the environment override wins, then the
+# platform's temp directory -- /tmp on the claude.ai container, %TEMP% on
+# Windows. A literal /tmp default breaks wherever that directory does not
+# exist, and the analysis has better things to fail on.
+JOURNAL = os.environ.get("CHESS_TIMELINE") or os.path.join(
+    tempfile.gettempdir(), "chess-verdict-timeline.tsv")
 MARKS = JOURNAL + ".mark"
 
 TEXT = {

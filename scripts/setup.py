@@ -40,6 +40,13 @@ missing rasteriser or imaging package is reported but does not fail the run.
 Every step is recorded in the timing journal (stage.py), which this starts --
 or continues, when it is run again in the middle of the same analysis (see
 stage.start_unless_running).
+
+Where apt-get is not there -- Windows, macOS, a bare container -- the script
+does not drive other package managers from here: winget can stop on a UAC
+prompt no unattended run can answer, and a hung setup is worse than a failed
+one with the command on screen. The engine step then fails and prints the
+command to run by hand; python-chess still installs through pip, which works
+everywhere, and a missing rasteriser degrades to SVG diagrams as before.
 """
 
 import importlib
@@ -55,7 +62,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import stage  # noqa: E402
 
-ENGINE_PATH = os.environ.get("STOCKFISH", "/usr/games/stockfish")
+def find_engine():
+    """Same order as solve.py's find_engine(), which cannot be imported yet:
+    python-chess, which solve.py needs, may not be installed. An explicit
+    STOCKFISH wins even when it names a file that is not there; then the
+    PATH; then the claude.ai container's apt location, /usr/games, which is
+    not always on the agent's PATH.
+    """
+    from_env = os.environ.get("STOCKFISH")
+    if from_env:
+        return from_env
+    return shutil.which("stockfish") or "/usr/games/stockfish"
+
+
+ENGINE_PATH = find_engine()
 PIP = [sys.executable, "-m", "pip", "install", "--break-system-packages", "-q"]
 TAIL = 12           # lines of a failed step's output worth showing
 
@@ -81,26 +101,52 @@ def have_rasteriser():
         return None
 
 
+APT = shutil.which("apt-get")
+
+
+def engine_hint():
+    """The command to install Stockfish where apt-get does not run."""
+    if shutil.which("winget"):
+        return ("winget install --id Stockfish.Stockfish "
+                "--accept-package-agreements --accept-source-agreements")
+    if shutil.which("brew"):
+        return "brew install stockfish"
+    return ("install Stockfish from https://stockfishchess.org/download/ and "
+            "put it on the PATH, or set the STOCKFISH variable")
+
+
 def plan(extras):
     """The steps, in order: (label, already-present test or None, command).
 
+    A command of None is a step this script cannot run itself: it exists to
+    fail loudly and show the command for a person, not to hang on a package
+    manager that may want a UAC answer no unattended run can give (winget).
+
     An apt package needs fresh package lists -- the claude.ai container has
-    started with empty ones since October 2026 -- so `apt-get update` is put in
-    front of the apt steps, and only when one of them will actually run.
+    started with empty ones since October 2026 -- so `apt-get update` is put
+    in front of the apt steps, and only when one of them will actually run.
+    Outside apt the rasteriser step is dropped: solve.py and compare.py
+    degrade to SVG on their own, and the Ready line says so.
     """
-    apt = [
-        ("install engine", have_engine,
-         ["apt-get", "install", "-y", "-q", "stockfish"]),
-        ("install rasteriser", have_rasteriser,
-         ["apt-get", "install", "-y", "-q", "librsvg2-bin"]),
-    ]
     steps = []
-    if not all(present() for _, present, _ in apt):
-        steps.append(("update package lists", None, ["apt-get", "update", "-q"]))
-    steps.append(apt[0])
-    steps.append(("install python-chess", lambda: have_module("chess"),
-                  PIP + ["--use-pep517", "chess"]))
-    steps.append(apt[1])
+    if APT:
+        apt = [
+            ("install engine", have_engine,
+             ["apt-get", "install", "-y", "-q", "stockfish"]),
+            ("install rasteriser", have_rasteriser,
+             ["apt-get", "install", "-y", "-q", "librsvg2-bin"]),
+        ]
+        if not all(present() for _, present, _ in apt):
+            steps.append(("update package lists", None,
+                          ["apt-get", "update", "-q"]))
+        steps.append(apt[0])
+        steps.append(("install python-chess", lambda: have_module("chess"),
+                      PIP + ["--use-pep517", "chess"]))
+        steps.append(apt[1])
+    else:
+        steps.append(("install engine", have_engine, None))
+        steps.append(("install python-chess", lambda: have_module("chess"),
+                      PIP + ["--use-pep517", "chess"]))
     if "image" in extras or "recognizer" in extras:
         steps.append(("install imaging",
                       lambda: have_module("PIL") and have_module("numpy"),
@@ -150,9 +196,13 @@ def main(argv):
             print(f"skip  {label:22} already installed")
             stage.append(0, label, None, "already installed")
             continue
-        started = time.time()
-        code, out = run(cmd)
-        dt = time.time() - started
+        if cmd is None:
+            code, dt = 1, 0.0
+            out = f"nothing this script can run -- by hand: {engine_hint()}"
+        else:
+            started = time.time()
+            code, out = run(cmd)
+            dt = time.time() - started
         stage.append(0, label, dt, "" if code == 0 else f"exit code {code}")
         note = ""
         if label == "update package lists":

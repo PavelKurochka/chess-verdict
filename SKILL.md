@@ -2,7 +2,7 @@
 name: chess-verdict
 license: GPL-3.0-or-later
 metadata:
-  version: "2.35.2"
+  version: "2.36.0"
 description: >-
   Delivers a verdict on a chess position with Stockfish: reads the position from
   a diagram image or a FEN string, confirms the reading is legal and the right
@@ -77,13 +77,13 @@ Open `SKILL.md` once with `view`: that one line is the activation signal. Read e
 python3 scripts/setup.py                # add --image for a diagram image, --recognizer to run img2fen.py
 ```
 
-Run it exactly as written, from the skill's directory, at the start of every analysis — no pipe, no redirect, no extra lines. It starts the timing journal, installs the engine, python-chess and the rasteriser (`--image` adds Pillow and NumPy for the comparison sheet, `--recognizer` onnxruntime as well, about 54 MB), skips whatever is already there, and prints one line per step. About twenty seconds the first time, under one after that. It ends `Ready: …` or `NOT READY: …`; on the second, say the engine did not install and do not analyse by hand.
+Run it exactly as written, from the skill's directory, at the start of every analysis — no pipe, no redirect, no extra lines. On Windows run the same commands with `py -3` in place of `python3`. It starts the timing journal, installs the engine, python-chess and, where a system package manager can, the rasteriser (`--image` adds Pillow and NumPy for the comparison sheet, `--recognizer` onnxruntime as well, about 54 MB), skips whatever is already there, and prints one line per step. Where no package manager applies it does not install the engine itself: it prints the command to run by hand. About twenty seconds the first time, under one after that. It ends `Ready: …` or `NOT READY: …`; on the second, say the engine did not install and do not analyse by hand.
 
 From then on every command goes through the wrapper: `python3 scripts/stage.py "<label>" -- <command>`. It is closed by `python3 scripts/stage.py --stop` after the last command of the analysis — see [Timing](#timing). **The timing table is not printed unless the user asks for it.**
 
 ### Exact endgames: the one network setting
 
-At seven pieces or fewer `solve.py` queries `tablebase.lichess.ovh`. Reaching it is the **user's** setting: *Domain allowlist → Additional allowed domains*, exactly that one host — not `lichess.org`, not a wildcard (on Team and Enterprise an admin controls it; it may apply only in a new chat). After the board link the run prints one of:
+At seven pieces or fewer `solve.py` queries `tablebase.lichess.ovh`. In the claude.ai app's sandbox reaching it is the **user's** setting: *Domain allowlist → Additional allowed domains*, exactly that one host — not `lichess.org`, not a wildcard (on Team and Enterprise an admin controls it; it may apply only in a new chat). Outside that sandbox the query simply works and no setting is needed. After the board link the run prints one of:
 
 - `Tablebase (Lichess Syzygy, exact): …` — the answer; report it as in step 4.
 - `… allowlist refuses tablebase.lichess.ovh …` — tell the user once per conversation, in one sentence, which host to add and where, then carry on with the engine.
@@ -223,7 +223,7 @@ Every one of these has actually cost minutes in practice.
 
 **When the position came from an image, pass the image itself and its side — `--source <image> --view white` (or `black`).** The diagram then faces the way the source does (by default it faces the side to move, so a Black-to-move book diagram would come out upside down), and the run also builds `compare.png`: the source cropped to its board beside the reading, one 8×8 grid ruled over both, so a square is at the same point in both halves.
 
-**Open that diagram — the sheet, for an image — then send it to the user as a file**; the run ends by naming it. Both halves matter. Opening it is the check — the file is a PNG precisely so it can be read here and compared against the source square by square. Sending it is what lets the user catch a misread without being asked; a file written to `/mnt/user-data/outputs` and never sent is not shown to them.
+**Open that diagram — the sheet, for an image — then send it to the user as a file**; the run ends by naming it. Both halves matter. Opening it is the check — the file is a PNG precisely so it can be read here and compared against the source square by square. Sending it is what lets the user catch a misread without being asked; a file left on disk and never sent is not shown to them.
 
 The sheet needs Pillow and NumPy (`setup.py --image`); without them the run says so and the bare diagram is what gets sent. The board is found by colour, with a second path for monochrome diagrams. Where neither works — a photograph of a physical board, most often — the source is shown whole and the run says the grids may not line up. `compare.py` builds the same sheet on its own, with `--no-crop` to force that.
 

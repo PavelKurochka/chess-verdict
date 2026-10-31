@@ -475,7 +475,9 @@ it says which setting is missing and falls back to the URL.
 
 Because the sandbox is not allowed to reach the tablebase. In the Claude app's
 settings, under **Domain allowlist → Additional allowed domains**, add
-`tablebase.lichess.ovh` and start a new chat. Nothing else needs adding. On Team
+`tablebase.lichess.ovh` and start a new chat. Nothing else needs adding. On your
+own computer, in an agent running locally, no setting is needed and the query
+simply works. On Team
 and Enterprise plans the organisation admin controls that list. The run itself
 says when this is the cause; if it says the tablebase *did not answer* instead,
 Lichess was slow or busy and trying again later is the fix.
@@ -487,9 +489,9 @@ Lichess was slow or busy and trying again later is the fix.
 Genuinely, and not as a courtesy:
 
 - **You want a document, not a runtime.** `chess-best-move` is portable prose with
-  no dependencies. `chess-verdict`'s scripts assume a Linux environment with
-  `apt`, `pip`, and Stockfish at `/usr/games/stockfish` (overridable via
-  `$STOCKFISH`).
+  no dependencies. `chess-verdict` runs real scripts, which install their own
+  dependencies — apt-based on the claude.ai container, pip-based elsewhere, and
+  a printed hand-install command where no package manager applies.
 - **You are building the vision yourself.** Its per-square procedure, count
   validation, and debug-visualisation discipline are a better starting point than
   "read it off the image" if you actually intend to write a detector.
